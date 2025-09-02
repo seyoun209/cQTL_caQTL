@@ -1,0 +1,38 @@
+## Path to sample sheet
+samplesheet: 'cqtl_atac_sample.txt'
+
+## List columns to concatenate for file names 
+## (or indicate a single Name column, i.e. fileNamesFrom: ['Name'])
+fileNamesFrom: ['Proj','Donor','Condition','Tissue','Protocol_notes']
+
+paths:
+  outdir: atac_output
+
+bwa_index: '/users/s/e/seyoun/Ref/genome/bwa_idx/hg38'
+blacklist: '/work/users/s/e/seyoun/cQTL_caQTL/external/blacklist_region/ENCFF356LFX.bed.gz'
+
+#atacqv
+tssextension: '2000'
+
+#deeptools
+bin_size: '10'
+effective_genome_size: '2862010428'
+normalize_option: 'RPGC'
+chrsize: '/users/s/e/seyoun/Ref/genome/chrsize_onlychr.txt'
+
+## Software versions
+fastqcVers: "0.12.1"
+trim_galore: "0.6.7"
+python: "3.12.4"
+r: "4.5.0"
+bwaVers: "0.7.17"
+samtoolsVers: "1.22"
+javaVers: "17.0.2"
+waspVer: "2023-02"
+picardVers: "3.4.0"
+ataqvVers: "1.0.0"
+deeptoolsVers: "3.5.4"
+macs2: "2.2.9.1"
+bedtools: "2.31.1"
+subread: "2.1.1"
+shapeit: "5.1.1"
