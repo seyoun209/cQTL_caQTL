@@ -1,0 +1,9 @@
+env/
+tools/
+*.txt
+external/*
+atac_output/*
+rna_output/*
+hic_output/*
+output/
+workflow_logs/*
