@@ -10,6 +10,8 @@ paths:
 
 bwa_index: '/users/s/e/seyoun/Ref/genome/bwa_idx/hg38'
 blacklist: '/work/users/s/e/seyoun/cQTL_caQTL/external/blacklist_region/ENCFF356LFX.bed.gz'
+tss_annotation: '/users/s/e/seyoun/Ref/genome/gencode.v45.annotation.tss.bed.gz'
+atac_qc_Rscript: '/work/users/s/e/seyoun/cQTL_caQTL/scripts/atac_workflow/atac_bamQC.R'
 
 #atacqv
 tssextension: '2000'

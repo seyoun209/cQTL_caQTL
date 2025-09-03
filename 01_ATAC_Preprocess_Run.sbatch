@@ -15,17 +15,22 @@ set -e
 module load python/3.12.4
 
 ## Create and activate virtual environment with requirements
-python3 -m venv env && source env/bin/activate && pip3 install -r config/requirements.txt
+python3 -m venv env
+source env/bin/activate && pip3 install -r config/requirements.txt
 #pip install --upgrade pip
 
 ## Make directory for slurm logs
-mkdir -p output/logs_slurm
+mkdir -p atac_output/logs_slurm workflow_logs
 
 
 ## Execute common preprocess
-
-snakemake -s workflow/atac_preprocess.smk \
+snakemake -s workflow/atac_process/00_atac_preprocess.smk \
   --configfile config/ATAC_config.yaml \
   --profile config/profile_slurm \
-  -j 120 --max-jobs-per-second 5 --max-status-checks-per-second 1 --rerun-incomplete -p --latency-wait 500 -n
+  -j 120 --max-jobs-per-second 5 --max-status-checks-per-second 1 \
+  --rerun-incomplete -p --latency-wait 500
+
+echo "ATAC preprocessing completed successfully!"
+echo "Output files are in: atac_output/"
+echo "Next step: Run WASP processing or continue with standard analysis"
 
