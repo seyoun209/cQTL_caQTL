@@ -1,0 +1,35 @@
+# GENOTYPE PROCESSING CONFIG
+
+## Path to genotyping data samplesheet
+geno: 'geno.csv'
+
+## Thresholds for variant inclusion in PLINK
+miss_call: 0.1 # PLINK --geno: Missing rate per SNP; 90% genotyping rate (10% missing)
+maf: 0.01 # PLINK --maf: Minor allele frequency >= 0.01
+hwe: .000001 # PLINK --hwe: Hardy-Weinberg equilibrium p-value threshold
+remove: 'remove.txt' # Text file listing samples to remove
+
+## Genome-specific reference parameters (GRCh38)
+ref: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/ALL/all_snps/1000G.GRCh38.20190312_chrAll_id'
+panel: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/1000G_phase3.Updatedpanel'
+sequence: '/users/s/e/seyoun/Ref/genome/GRCh38.primary_assembly.genome.fa'
+
+## Eigensoft software path
+eigensoft: '/work/users/s/e/seyoun/cQTL_caQTL/tools/bin'
+
+## Additional options
+pop_name: 'CQTL' # Name of data 'population' for ancestry PCA plot
+
+# IMPUTATION PROCESSING
+## Path to imputed genotyping data samplesheet
+vcf: 'vcf_list_hg38.csv'
+
+# Output directories
+paths:
+  genotype_outdir: genotype_output
+
+# Software versions
+python: "3.12.4"
+plink: "1.90b6.21"
+bcftools: "1.22"
+samtools: "1.22"

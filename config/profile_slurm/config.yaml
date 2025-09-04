@@ -21,7 +21,8 @@ set-resources:
   reheader:
     mem_mb: 8000
   mark_duplicates:
-    mem_mb: 10000
+    mem_mb: 50000
+    cpus_per_task: 4
   collect_insert_size_metrics:
     mem_mb: 6000
   add_read_groups:

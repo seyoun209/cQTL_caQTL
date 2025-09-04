@@ -119,9 +119,36 @@ rule align:
         samtools flagstat {output.sortedBam} > {output.stats} 2>> {log}
         """
 
-rule mark_duplicates:
+rule add_read_groups:
     input:
         bam=rules.align.output.sortedBam
+    output:
+        bam=OUT("align", "{sample}_RG.bam"),
+        bai=OUT("align", "{sample}_RG.bam.bai")
+    params:
+        picard_version=config["picardVers"],
+        samtools_version=config["samtoolsVers"],
+        java_version=config["javaVers"],
+        align_dir=OUT("align")
+    threads: 4
+    log:
+        OUT("logs", "add_read_groups_{sample}.log")
+    shell:
+        """
+        module load java/{params.java_version}
+        module load picard/{params.picard_version}
+        module load samtools/{params.samtools_version}
+        mkdir -p {params.align_dir}
+
+        picard AddOrReplaceReadGroups I={input.bam} O={output.bam} \
+          RGSM={wildcards.sample} RGPL=ILLUMINA RGLB=lib1 RGPU=unit1 2> {log}
+        samtools index {output.bam} 2>> {log}
+        """
+
+
+rule mark_duplicates:
+    input:
+        bam=rules.add_read_groups.output.bam
     output:
         dedup_bam=OUT("dedup", "{sample}_dedup.bam"),
         metrics=OUT("dedup", "{sample}_dup_metrics.txt"),
@@ -141,10 +168,10 @@ rule mark_duplicates:
         module load samtools/{params.samtools_version}
         mkdir -p {params.dedup_dir}
         
-        java -Xmx16g -jar /nas/longleaf/apps/picard/{params.picard_version}/picard-{params.picard_version}/picard.jar MarkDuplicates \
-            I={input.bam} O={output.dedup_bam} M={output.metrics} REMOVE_DUPLICATES=true 2> {log}
+        picard MarkDuplicates I={input.bam} O={output.dedup_bam} M={output.metrics} REMOVE_DUPLICATES=true 2> {log}
         samtools index {output.dedup_bam} 2>> {log}
         """
+
 
 rule filter_mitochondrial_reads:
     input:
@@ -155,13 +182,13 @@ rule filter_mitochondrial_reads:
     threads: 4
     params:
         samtools_version=config["samtoolsVers"],
-        filt_aligned_dir=OUT("filtered")
+        filtered_dir=OUT("filtered")
     log:
         OUT("logs", "filter_mitochondrial_{sample}.log")
     shell:
         """
         module load samtools/{params.samtools_version}
-        mkdir -p {params.filt_aligned_dir}
+        mkdir -p {params.filtered_dir}
         
         samtools view -bh {input.dedup_bam} chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 \
           chr11 chr12 chr13 chr14 chr15 chr16 chr17 chr18 chr19 chr20 chr21 chr22 chrX chrY \
@@ -181,14 +208,14 @@ rule remove_blacklist_regions:
         bedtools_ver=config["bedtools"],
         samtools_version=config["samtoolsVers"],
         blacklist_bed=config["blacklist"],
-        blk_filt_dir=OUT("filtered/blk_filter")
+        blk_filter_dir=OUT("filtered/blk_filter")
     log:
         OUT("logs", "remove_blacklist_{sample}.log")
     shell:
         """
         module load bedtools/{params.bedtools_ver}
         module load samtools/{params.samtools_version}
-        mkdir -p {params.blk_filt_dir}
+        mkdir -p {params.blk_filter_dir}
         
         bedtools intersect -v -abam {input.bam} -b {params.blacklist_bed} | \
           samtools sort -o {output.final_bam} 2> {log}
@@ -221,31 +248,9 @@ rule collect_insert_size_metrics:
           I={input.bam} O={output.metrics} H={output.histogram} M=0.05 ASSUME_SORTED=true 2> {log}
         """
 
-rule add_read_groups:
-    input:
-        bam=rules.remove_blacklist_regions.output.final_bam
-    output:
-        bam=OUT("align", "{sample}_RG.bam"),
-        bai=OUT("align", "{sample}_RG.bam.bai")
-    params:
-        picard_version=config["picardVers"],
-        samtools_version=config["samtoolsVers"]
-    threads: 4
-    log:
-        OUT("logs", "add_read_groups_{sample}.log")
-    shell:
-        """
-        module load picard/{params.picard_version}
-        module load samtools/{params.samtools_version}
-        
-        picard AddOrReplaceReadGroups I={input.bam} O={output.bam} \
-          RGSM={wildcards.sample} RGPL=ILLUMINA RGLB=lib1 RGPU=unit1 2> {log}
-        samtools index {output.bam} 2>> {log}
-        """
-
 rule run_ataqv:
     input:
-        bam=rules.add_read_groups.output.bam
+        bam=rules.remove_blacklist_regions.output.final_bam
     output:
         txt=OUT("ataqv", "{sample}.ataqv.txt"),
         json=OUT("ataqv", "{sample}.ataqv.json")
@@ -273,7 +278,7 @@ rule bam_qc:
     output:
         qc=OUT("bamQC", "{sample}_bamQC")
     params:
-        script=config['atac_qc_Rscript'],
+        script=config["atac_qc_Rscript"],
         r_version=config["r"],
         bamqc_dir=OUT("bamQC")
     threads: 6
@@ -283,7 +288,7 @@ rule bam_qc:
         """
         module load r/{params.r_version}
         mkdir -p {params.bamqc_dir}
-        Rscript {params.script} {input.bam} {params.bamqc_dir} ".sorted_final.bam" 2> {log}
+        Rscript {params.script} {input.bam} "{params.bamqc_dir}" ".sorted_final.bam" 2> {log}
         """
 
 rule generate_bam_samplesheet:
