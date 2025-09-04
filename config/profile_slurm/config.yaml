@@ -11,7 +11,7 @@ executor: cluster-generic
 
 # Default resources (used when a rule doesn't override them)
 default-resources:
-  - mem_mb=4000
+  - mem_mb=4000        # When geno_pipeline running otherwise we can keep it as 4G
   - time="3-00:00:00"   # 3 days
 
 # Per-rule resource overrides (transcribed from your old cluster-config)
@@ -27,6 +27,8 @@ set-resources:
     mem_mb: 6000
   add_read_groups:
     mem_mb: 6000
+  bam_qc:
+    mem_mb: 20000
   verifybamid:
     mem_mb: 15000
     time: "11-00:00:00"

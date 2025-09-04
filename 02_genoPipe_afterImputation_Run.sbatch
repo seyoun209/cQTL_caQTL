@@ -6,7 +6,7 @@
 #SBATCH -c 2  
 #SBATCH -p general
 #SBATCH --mem=4gb
-#SBATCH -o workflow_logs/genoPipe_%x-%j.out
+#SBATCH -o workflow_logs/%x-%j.out
 
 ## Exit if any command fails
 set -e
@@ -23,13 +23,8 @@ source env/bin/activate && pip3 install -r config/requirements.txt
 mkdir -p geno_output/logs_slurm workflow_logs
 
 ## Execute Geno pipe preprocess
-snakemake -s workflow/genotype_process/00_geno_filter.smk \
+snakemake -s workflow/genotype_process/01_geno_after_imputation.smk \
   --configfile config/Geno_config.yaml \
   --profile config/profile_slurm \
   -j 120 --max-jobs-per-second 5 --max-status-checks-per-second 1 \
   --rerun-incomplete -p --latency-wait 500
-
-echo "Genopipe preprocess completed succesfully!"
-echo "Output files are in : geno_output/"
-echo "Next step: run geno imputation (TOPMED Imputation server)"
-

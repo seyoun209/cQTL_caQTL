@@ -256,7 +256,7 @@ rule run_ataqv:
         json=OUT("ataqv", "{sample}.ataqv.json")
     params:
         tss_file=config["tss_annotation"],
-        ataqv_version=config["ataqvVers"],
+        ataqv_bin=config["ataqvVers"],
         tss_extension=config["tssextension"],
         ataqv_dir=OUT("ataqv")
     threads: 6
@@ -264,10 +264,9 @@ rule run_ataqv:
         OUT("logs", "ataqv_{sample}.log")
     shell:
         """
-        module load ataqv/{params.ataqv_version}
         mkdir -p {params.ataqv_dir}
         
-        ataqv --tss-file {params.tss_file} --tss-extension {params.tss_extension} \
+        {params.ataqv_bin} --tss-file {params.tss_file} --tss-extension {params.tss_extension} \
           --metrics-file {output.json} --ignore-read-groups human \
           {input.bam} > {output.txt} 2> {log}
         """
