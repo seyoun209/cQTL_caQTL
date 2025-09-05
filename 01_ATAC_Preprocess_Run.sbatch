@@ -26,7 +26,7 @@ mkdir -p atac_output/logs_slurm workflow_logs
 ## Execute common preprocess
 snakemake -s workflow/atac_process/00_atac_preprocess.smk \
   --configfile config/ATAC_config.yaml \
-  --profile config/profile_slurm \
+  --profile config/profile_slurm_atac \
   -j 120 --max-jobs-per-second 5 --max-status-checks-per-second 1 \
   --rerun-incomplete -p --latency-wait 500
 

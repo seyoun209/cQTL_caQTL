@@ -1,12 +1,12 @@
 #! /bin/bash -login
-#SBATCH -J atac_preprocess
+#SBATCH -J genoPipe
 #SBATCH -t 11-00:00:00
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH -c 2  
 #SBATCH -p general
 #SBATCH --mem=4gb
-#SBATCH -o workflow_logs/genoPipe_%x-%j.out
+#SBATCH -o workflow_logs/%x-%j.out
 
 ## Exit if any command fails
 set -e
@@ -25,7 +25,7 @@ mkdir -p geno_output/logs_slurm workflow_logs
 ## Execute Geno pipe preprocess
 snakemake -s workflow/genotype_process/00_geno_filter.smk \
   --configfile config/Geno_config.yaml \
-  --profile config/profile_slurm \
+  --profile config/profile_slurm_geno \
   -j 120 --max-jobs-per-second 5 --max-status-checks-per-second 1 \
   --rerun-incomplete -p --latency-wait 500
 

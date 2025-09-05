@@ -15,9 +15,9 @@ case $1 in
             echo -e '\e[31mSpecify which workflow to unlock (i.e. run_RNAprocessing)'
             exit 2
             ;;
-        '01_ATAC_Preprocess_Run')
+        '01_ATAC_Preprocess_Run|01_ATAC_Preprocess_Run.sbatch')
             ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/atac_process/00_atac_preprocess.smk --configfile "config/ATAC_config.yaml" --profile config/profile_slurm
+            snakemake -j 1 --unlock -s workflow/atac_process/00_atac_preprocess.smk --configfile "config/ATAC_config.yaml" --profile config/profile_slurm_atac
             ;;
     'run_VCFpreprocessing')
             ## Unlock snakemake workflow

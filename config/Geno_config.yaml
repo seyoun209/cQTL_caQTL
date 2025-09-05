@@ -26,7 +26,7 @@ vcf: 'vcf_list_hg38.csv'
 
 # Output directories
 paths:
-  genotype_outdir: genotype_output
+  genotype_outdir: geno_output
 
 # Software versions
 python: "3.12.4"

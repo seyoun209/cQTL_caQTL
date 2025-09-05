@@ -1,0 +1,54 @@
+host: c0536.ll.unc.edu
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 2
+Rules claiming more threads will be scaled down.
+Select jobs to execute...
+Execute 1 jobs...
+
+[Fri Sep  5 14:09:47 2025]
+localrule removeSamples:
+    input: geno_output/binary/COA9_10.bed, geno_output/binary/COA9_10.bim, geno_output/binary/COA9_10.fam
+    output: geno_output/binary/COA9_10_filter.bed, geno_output/binary/COA9_10_filter.bim, geno_output/binary/COA9_10_filter.fam, remove.plink
+    jobid: 0
+    reason: Forced execution
+    resources: mem_mb=16000, mem_mib=15259, disk_mb=1000, disk_mib=954, tmpdir=/tmp/seyoun/14755493/c0536.ll.unc.edu, time=3-00:00:00
+
+Traceback (most recent call last):
+  File "/work/users/s/e/seyoun/cQTL_caQTL/scripts/geno_workflow/removeSamples.py", line 7, in <module>
+    removeSamples = pd.read_csv(sys.argv[1], sep = " ")
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/users/s/e/seyoun/cQTL_caQTL/env/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/users/s/e/seyoun/cQTL_caQTL/env/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 620, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/users/s/e/seyoun/cQTL_caQTL/env/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1620, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/users/s/e/seyoun/cQTL_caQTL/env/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1880, in _make_engine
+    self.handles = get_handle(
+                   ^^^^^^^^^^^
+  File "/work/users/s/e/seyoun/cQTL_caQTL/env/lib/python3.12/site-packages/pandas/io/common.py", line 873, in get_handle
+    handle = open(
+             ^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'remove.txt'
+RuleException:
+FileNotFoundError in file /work/users/s/e/seyoun/cQTL_caQTL/workflow/genotype_process/00_geno_filter.smk, line 74:
+[Errno 2] No such file or directory: 'geno_output/binary/COA9_10_filter.log'
+  File "/work/users/s/e/seyoun/cQTL_caQTL/workflow/genotype_process/00_geno_filter.smk", line 74, in __rule_removeSamples
+  File "/nas/longleaf/rhel9/apps/python/3.12.4/lib/python3.12/shutil.py", line 867, in move
+  File "/nas/longleaf/rhel9/apps/python/3.12.4/lib/python3.12/shutil.py", line 475, in copy2
+  File "/nas/longleaf/rhel9/apps/python/3.12.4/lib/python3.12/shutil.py", line 260, in copyfile
+[Fri Sep  5 14:09:47 2025]
+Error in rule removeSamples:
+    jobid: 0
+    input: geno_output/binary/COA9_10.bed, geno_output/binary/COA9_10.bim, geno_output/binary/COA9_10.fam
+    output: geno_output/binary/COA9_10_filter.bed, geno_output/binary/COA9_10_filter.bim, geno_output/binary/COA9_10_filter.fam, remove.plink
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Storing output in storage.
+WorkflowError:
+At least one job did not complete successfully.

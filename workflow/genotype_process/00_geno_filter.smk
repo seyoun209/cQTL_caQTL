@@ -3,213 +3,219 @@
 import pandas as pd
 import os, subprocess, glob, shutil
 
-## Load config file
-configfile: "config/config.yaml"
+def OUT(*parts):
+    return os.path.join(config["paths"]["genotype_outdir"], *[p for p in parts if p])
 
 ## Read in samplesheet
-genos = pd.read_csv(config["geno"], sep = ",")
-
-## Convert samplesheet columns to strings
+genos = pd.read_csv(config["geno"], sep=",")
 genos = genos.astype(str)
 
-## Concatenate Genotyping_Directory to File Prefix for full path
+## Concatenate Genotyping_Directory to File_Prefix for full path
 genos['Name'] = genos[['Genotyping_Directory', 'File_Prefix']].apply(lambda row: os.path.join(*row), axis=1)
 
 mergeName = '_'.join(genos.Proj.unique()) + '_' + '_'.join(genos['Batch'])
 
-## Define actions on success
 onsuccess:
-
-    ## Success message
-    print("Genotype data processing finished successfully! VCFs split by chromosome in 'output/imputation' are ready to be imputed with the imputation server of your choice. Ancestry plot can be found at output/ancestry/ancestry.pdf.")
+    print("Genotype data processing finished successfully!")
+    print(f"VCFs split by chromosome in '{OUT('imputation')}' are ready for imputation.")
+    print(f"Ancestry plot can be found at {OUT('ancestry', mergeName + '_ancestry.pdf')}")
     
     ## Clean up intermediate files
-    for f in glob.glob("output/binary/*.hh"):
+    for f in glob.glob(f"{OUT('binary')}/*.hh"):
         os.remove(f)
-    for f in glob.glob("output/merge/*.hh"):
+    for f in glob.glob(f"{OUT('merge')}/*.hh"):
         os.remove(f)
-    for f in glob.glob("output/ancestry/*.hh"):
+    for f in glob.glob(f"{OUT('ancestry')}/*.hh"):
         os.remove(f)
-    for f in glob.glob("output/ancestry/*.nosex"):
+    for f in glob.glob(f"{OUT('ancestry')}/*.nosex"):
         os.remove(f)
 
-## Define rules
 rule all:
     input:
-        [expand("output/imputation/{prefix}_chr{chr}.recode.vcf.gz", prefix = mergeName, chr = c) for c in range(1, 23)],
-        "output/reports/" + mergeName + ".sexcheck",
-        "output/reports/" + mergeName + ".genome",
-        "output/ancestry/" + mergeName + "_ref_merge.pca.evec",
-        "output/ancestry/" + mergeName + "_ref_merge.eval",
-        "output/ancestry/" + mergeName + "_ancestry.pdf"
+        expand(OUT("imputation", f"{mergeName}_chr{{chr}}.recode.vcf.gz"), chr=range(1, 23)),
+        OUT("reports", mergeName + ".sexcheck"),
+        OUT("reports", mergeName + ".genome"),
+        OUT("ancestry", mergeName + "_ref_merge.pca.evec"),
+        OUT("ancestry", mergeName + "_ref_merge.eval"),
+        OUT("ancestry", mergeName + "_ancestry.pdf")
 
 rule convertBinary:
     input:
-        expand("{name}{ext}", name = genos['Name'], ext=[".map",".ped"])
+        expand("{name}{ext}", name=genos['Name'], ext=[".map",".ped"])
     output:
-        temp(expand("output/binary/{name}{ext}", name = genos['Batch'], ext = [".bed",".bim",".fam"]))
+        temp(expand(OUT("binary", "{name}{ext}"), name=genos['Batch'], ext=[".bed",".bim",".fam"]))
+    params:
+        binary_dir=OUT("binary"),
+        logs_dir=OUT("binary", "logs")
     run:
-        os.makedirs("output/binary/logs", exist_ok = True)
+        os.makedirs(params.logs_dir, exist_ok=True)
         for row in genos.itertuples():
-            cmd = "plink --file " + row.Name + " --make-bed --allow-extra-chr --out output/binary/" + row.Batch + " 1> output/binary/logs/" + row.Batch + "_binary.out"
-            p = subprocess.run(cmd, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE) 
-
-            ## Move .log file to .err file in logs folder
-            shutil.move("output/binary/" + row.Batch +  ".log", "output/binary/logs/" + row.Batch + "_binary.err")
+            # Use the exact same approach as your working version, just with module loading
+            cmd = f"module load plink/{config['plink']} && plink --file {row.Name} --make-bed --allow-extra-chr --out {params.binary_dir}/{row.Batch} 1> {params.logs_dir}/{row.Batch}_binary.out"
+            p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            shutil.move(f"{params.binary_dir}/{row.Batch}.log", f"{params.logs_dir}/{row.Batch}_binary.err")
 
 rule removeSamples:
     input:
         rules.convertBinary.output
     output:
-        temp(expand("output/binary/{name}_filter{ext}", name = genos['Batch'], ext = [".bed",".bim",".fam"])),
+        temp(expand(OUT("binary", "{name}_filter{ext}"), name=genos['Batch'], ext=[".bed",".bim",".fam"])),
         removeFile=temp("remove.plink")
     params:
-        removeSamples = config['remove']
+        removeSamples=config['remove'],
+        binary_dir=OUT("binary"),
+        logs_dir=OUT("binary", "logs")
     run:
-        # Generate file for removal of variants from plink
-        subprocess.call(['python3', 'scripts/removeSamples.py', params.removeSamples])
-
-        # Attempt to remove from all files
+        subprocess.call(['python3', 'scripts/geno_workflow/removeSamples.py', params.removeSamples])
+        
         for row in genos.itertuples():
-            cmd = "plink --bfile output/binary/" + row.Batch + " --remove remove.plink --make-bed --out output/binary/" + row.Batch + "_filter 1> output/binary/logs/" + row.Batch + "_filter.out"
-            p = subprocess.run(cmd, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-            ## Move .log file to .err file in logs folder
-            shutil.move("output/binary/" + row.Batch +  "_filter.log", "output/binary/logs/" + row.Batch + "_filter.err")
+            cmd = f"plink --bfile {params.binary_dir}/{row.Batch} --remove remove.plink --make-bed --out {params.binary_dir}/{row.Batch}_filter 1> {params.logs_dir}/{row.Batch}_filter.out"
+            p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            shutil.move(f"{params.binary_dir}/{row.Batch}_filter.log", f"{params.logs_dir}/{row.Batch}_filter.err")
 
 rule mergeData:
     input:
         rules.removeSamples.output
     output:
         temp("mergeList.txt"),
-        bed=temp("output/merge/" + mergeName + ".bed"),
-        bim=temp("output/merge/" + mergeName + ".bim"),
-        fam=temp("output/merge/" + mergeName + ".fam")
+        bed=temp(OUT("merge", mergeName + ".bed")),
+        bim=temp(OUT("merge", mergeName + ".bim")),
+        fam=temp(OUT("merge", mergeName + ".fam"))
     params:
-        file = genos.loc[0, "Batch"] + "_filter", 
-        prefix = mergeName
+        file=genos.loc[0, "Batch"] + "_filter", 
+        prefix=mergeName,
+        binary_dir=OUT("binary"),
+        merge_dir=OUT("merge"),
+        logs_dir=OUT("merge", "logs"),
+        reports_dir=OUT("reports")
     log:
-        out = "output/merge/logs/" + mergeName + ".out"
+        out=OUT("merge", "logs", mergeName + ".out")
     run:
-        os.makedirs("output/merge/logs", exist_ok = True)
+        os.makedirs(params.logs_dir, exist_ok=True)
+        os.makedirs(params.reports_dir, exist_ok=True)
 
-        ## Create a mergeList
         mergeList = open('mergeList.txt', 'w')
         for row in genos[1:].itertuples():
-            mergeList.write("%s\n" % ("output/binary/" + row.Batch + "_filter"))
+            mergeList.write(f"{params.binary_dir}/{row.Batch}_filter\n")
         mergeList.close()
 
-        ## Try merging first time
-        cmd = "plink --bfile output/binary/" + params.file + " --merge-list mergeList.txt --merge-equal-pos --make-bed --out output/merge/" + params.prefix  + " 1> " + log.out
-        p = subprocess.run(cmd, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+        cmd = f"plink --bfile {params.binary_dir}/{params.file} --merge-list mergeList.txt --merge-equal-pos --make-bed --out {params.merge_dir}/{params.prefix} 1> {log.out}"
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         i = 1
         while p.returncode != 0:
-            ## Grep for variants in merge log file with same position but different alleles
-            grep = "cat output/merge/" + mergeName + ".log | tr '\r\n' ' ' | grep -o 'Error: --merge-equal-pos failure.  Variants .*' | awk '{print $5}' | tr -d \"\'\" >> mergeFails.txt && cat output/merge/" + mergeName + ".log | tr '\r\n' ' ' | grep -o 'Error: --merge-equal-pos failure.  Variants .*' | awk '{print $7}' | tr -d \"\'\" >> mergeFails.txt"
-            p1 = subprocess.run(grep, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+            grep = f"cat {params.merge_dir}/{mergeName}.log | tr '\\r\\n' ' ' | grep -o 'Error: --merge-equal-pos failure.  Variants .*' | awk '{{print $5}}' | tr -d \"'\" >> mergeFails.txt && cat {params.merge_dir}/{mergeName}.log | tr '\\r\\n' ' ' | grep -o 'Error: --merge-equal-pos failure.  Variants .*' | awk '{{print $7}}' | tr -d \"'\" >> mergeFails.txt"
+            p1 = subprocess.run(grep, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            ## Rewrite mergeList.txt
             mergeList = open('mergeList.txt', 'w')
-            ## Remove snps in mergeFails.txt from all files 
             for row in genos.itertuples():
-                ## Remove previous files
                 if i != 1:
-                    for f in glob.glob("output/binary/" + row.Batch + "_filter_" + str(i-1) + ".*"):
+                    for f in glob.glob(f"{params.binary_dir}/{row.Batch}_filter_{i-1}.*"):
                         os.remove(f)
-                plink_subset = "plink --bfile output/binary/" + row.Batch + "_filter --exclude mergeFails.txt --make-bed --out output/binary/" + row.Batch + "_filter_" + str(i) + " 1> output/binary/logs/resubset.out"
-                p2 = subprocess.run(plink_subset, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+                plink_subset = f"plink --bfile {params.binary_dir}/{row.Batch}_filter --exclude mergeFails.txt --make-bed --out {params.binary_dir}/{row.Batch}_filter_{i} 1> {params.logs_dir}/resubset.out"
+                p2 = subprocess.run(plink_subset, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 if row.Index > 0:
-                    mergeList.write("%s\n" % ("output/binary/" + row.Batch + "_filter_" + str(i)))
+                    mergeList.write(f"{params.binary_dir}/{row.Batch}_filter_{i}\n")
             mergeList.close()
 
-            ## Try merging again with new files and update merge process
-            remerge = "plink --bfile output/binary/" + params.file + "_" + str(i) + " --merge-list mergeList.txt --merge-equal-pos --make-bed --out output/merge/" + params.prefix + " 1>" + log.out   
-            p = subprocess.run(remerge, shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-
-            ## Increment i 
+            remerge = f"plink --bfile {params.binary_dir}/{params.file}_{i} --merge-list mergeList.txt --merge-equal-pos --make-bed --out {params.merge_dir}/{params.prefix} 1>{log.out}"   
+            p = subprocess.run(remerge, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             i += 1
-        ## Move final list of merge fails to reports and clean files
-        os.makedirs("output/reports", exist_ok = True)
-        shutil.move("mergeFails.txt", "output/reports/" + mergeName + "_mergeFails.txt")
-        shutil.move("output/merge/" + mergeName + ".log", "output/merge/logs/" + mergeName + ".err")
-        os.remove("output/binary/logs/resubset.out")
+            
+        shutil.move("mergeFails.txt", f"{params.reports_dir}/{mergeName}_mergeFails.txt")
+        shutil.move(f"{params.merge_dir}/{mergeName}.log", f"{params.logs_dir}/{mergeName}.err")
+        if os.path.exists(f"{params.logs_dir}/resubset.out"):
+            os.remove(f"{params.logs_dir}/resubset.out")
 
 rule qc:
     input:
         rules.mergeData.output
     output:
-        bed=temp("output/merge/" + mergeName + "_qc.bed"),
-        bim=temp("output/merge/" + mergeName + "_qc.bim"),
-        fam=temp("output/merge/" + mergeName + "_qc.fam")
+        bed=temp(OUT("merge", mergeName + "_qc.bed")),
+        bim=temp(OUT("merge", mergeName + "_qc.bim")),
+        fam=temp(OUT("merge", mergeName + "_qc.fam"))
     params:
-        prefix = "output/merge/" + mergeName,
-        outpre = mergeName,
-        geno = config['miss_call'],
-        hwe = config['hwe'],
-        maf = config['maf']
+        prefix=OUT("merge", mergeName),
+        outpre=mergeName,
+        geno=config['miss_call'],
+        hwe=config['hwe'],
+        maf=config['maf'],
+        merge_dir=OUT("merge"),
+        logs_dir=OUT("merge", "logs")
     log:
-        out = "output/merge/logs/" + mergeName + "_qc.out"
+        out=OUT("merge", "logs", mergeName + "_qc.out")
     shell:
         """
-        mkdir -p output/merge/logs
-        # Run plink command
-        plink --bfile {params.prefix} --geno {params.geno} --hwe {params.hwe} --maf {params.maf} --make-bed --out output/merge/{params.outpre}_qc 1> {log.out}
-        mv output/merge/{params.outpre}_qc.log output/merge/logs/{params.outpre}_qc.err
+        mkdir -p {params.logs_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.prefix} --geno {params.geno} --hwe {params.hwe} --maf {params.maf} --make-bed --out {params.merge_dir}/{params.outpre}_qc 1> {log.out}
+        mv {params.merge_dir}/{params.outpre}_qc.log {params.logs_dir}/{params.outpre}_qc.err
         """
 
 rule sexCheck:
     input: 
         rules.qc.output
     output:
-        "output/reports/" + mergeName + ".sexcheck"
+        OUT("reports", mergeName + ".sexcheck")
     params:
-        prefix = "output/merge/" + mergeName + "_qc",
-        outpre = mergeName
+        prefix=OUT("merge", mergeName + "_qc"),
+        outpre=mergeName,
+        reports_dir=OUT("reports")
     shell:
         """
-        mkdir -p output/reports
-        plink --bfile {params.prefix} --check-sex --out output/reports/{params.outpre}
+        mkdir -p {params.reports_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.prefix} --check-sex --out {params.reports_dir}/{params.outpre}
 
-        if [[ -f output/reports/{params.outpre}.hh ]]
-        then
-            rm output/reports/{params.outpre}.hh
+        if [[ -f {params.reports_dir}/{params.outpre}.hh ]]; then
+            rm {params.reports_dir}/{params.outpre}.hh
         fi
-        rm output/reports/{params.outpre}.log
+        rm {params.reports_dir}/{params.outpre}.log
         """
 
 rule autosomePrune:
     input:
         rules.qc.output
     output:
-        bed="output/merge/" + mergeName + "_qcautosome.bed",
-        bim="output/merge/" + mergeName + "_qcautosome.bim",
-        fam="output/merge/" + mergeName + "_qcautosome.fam"
+        bed=OUT("merge", mergeName + "_qcautosome.bed"),
+        bim=OUT("merge", mergeName + "_qcautosome.bim"),
+        fam=OUT("merge", mergeName + "_qcautosome.fam")
     params:
-        prefix = "output/merge/" + mergeName + "_qc",
-        outpre = mergeName
+        prefix=OUT("merge", mergeName + "_qc"),
+        outpre=mergeName,
+        merge_dir=OUT("merge"),
+        logs_dir=OUT("merge", "logs")
     log:
-        out = "output/merge/logs/" + mergeName + "_qcautosome.out"
+        out=OUT("merge", "logs", mergeName + "_qcautosome.out")
     shell:
         """
-        mkdir -p output/merge
-        plink --bfile {params.prefix} --autosome --make-bed --out output/merge/{params.outpre}_qcautosome 1> {log.out}
-        mv output/merge/{params.outpre}_qcautosome.log output/merge/logs/{params.outpre}_qcautosome.err
+        mkdir -p {params.logs_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.prefix} --autosome --make-bed --out {params.merge_dir}/{params.outpre}_qcautosome 1> {log.out}
+        mv {params.merge_dir}/{params.outpre}_qcautosome.log {params.logs_dir}/{params.outpre}_qcautosome.err
         """
 
 rule snpFlip:
     input:
         rules.autosomePrune.output
     output:
-        rev = temp("output/imputation/snpflip.reverse"),
-        amb = temp("output/imputation/snpflip.ambiguous"),
-        an_bim = temp("output/imputation/snpflip.annotated_bim")
+        rev=temp(OUT("imputation", "snpflip.reverse")),
+        amb=temp(OUT("imputation", "snpflip.ambiguous")),
+        an_bim=temp(OUT("imputation", "snpflip.annotated_bim"))
     params:
-        prefix = "output/merge/" + mergeName + "_qcautosome",
-        sequence = config['sequence']
+        prefix=OUT("merge", mergeName + "_qcautosome"),
+        sequence=config['sequence'],
+        imputation_dir=OUT("imputation"),
+        python_ver=config['python']
     shell:
         """
-        module load python/3.6.6
-        mkdir -p output/imputation
-        snpflip --fasta-genome={params.sequence} --bim={params.prefix}.bim --output-prefix=output/imputation/snpflip
+        module load python/{params.python_ver}
+        mkdir -p {params.imputation_dir}
+        
+        
+        snpflip --fasta-genome={params.sequence} --bim={params.prefix}.bim --output-prefix={params.imputation_dir}/snpflip
         """
 
 rule flipSnps:
@@ -217,63 +223,67 @@ rule flipSnps:
         rules.autosomePrune.output, 
         rules.snpFlip.output.rev
     output:
-        bed=temp("output/imputation/" + mergeName + "_qcautosome_snpflip.bed"),
-        bim=temp("output/imputation/" + mergeName + "_qcautosome_snpflip.bim"),
-        fam=temp("output/imputation/" + mergeName + "_qcautosome_snpflip.fam")
+        bed=temp(OUT("imputation", mergeName + "_qcautosome_snpflip.bed")),
+        bim=temp(OUT("imputation", mergeName + "_qcautosome_snpflip.bim")),
+        fam=temp(OUT("imputation", mergeName + "_qcautosome_snpflip.fam"))
     params:
-        prefix = "output/merge/" + mergeName + "_qcautosome",
-        outpre = mergeName
+        prefix=OUT("merge", mergeName + "_qcautosome"),
+        outpre=mergeName,
+        imputation_dir=OUT("imputation"),
+        logs_dir=OUT("imputation", "logs")
     log:
-        out = "output/imputation/logs/" + mergeName + "_qcautosome_snpflip.out"
+        out=OUT("imputation", "logs", mergeName + "_qcautosome_snpflip.out")
     shell:
         """
-        mkdir -p output/imputation
-        plink --bfile {params.prefix} --flip output/imputation/snpflip.reverse --make-bed --out output/imputation/{params.outpre}_qcautosome_snpflip 1> {log.out}
-        mv output/imputation/{params.outpre}_qcautosome_snpflip.log output/imputation/logs/{params.outpre}_qcautosome_snpflip.err 
+        mkdir -p {params.logs_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.prefix} --flip {input[1]} --make-bed --out {params.imputation_dir}/{params.outpre}_qcautosome_snpflip 1> {log.out}
+        mv {params.imputation_dir}/{params.outpre}_qcautosome_snpflip.log {params.logs_dir}/{params.outpre}_qcautosome_snpflip.err 
         """
 
 rule convertVCF:
     input:
         rules.flipSnps.output
     output:
-        temp("output/imputation/" + mergeName + ".vcf")
+        temp(OUT("imputation", mergeName + ".vcf"))
     params:
-        prefix = "output/imputation/" + mergeName + "_qcautosome_snpflip",
-        outpre = mergeName
+        prefix=OUT("imputation", mergeName + "_qcautosome_snpflip"),
+        outpre=mergeName,
+        imputation_dir=OUT("imputation"),
+        logs_dir=OUT("imputation", "logs")
     log:
-        out = "output/imputation/logs/" + mergeName + "_vcf.out"
+        out=OUT("imputation", "logs", mergeName + "_vcf.out")
     shell:
         """
-        mkdir -p output/imputation
-        plink --bfile {params.prefix} --recode vcf --out output/imputation/{params.outpre} 1> {log.out}
-        mv output/imputation/{params.outpre}.log output/imputation/logs/{params.outpre}_vcf.err
+        mkdir -p {params.logs_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.prefix} --recode vcf --out {params.imputation_dir}/{params.outpre} 1> {log.out}
+        mv {params.imputation_dir}/{params.outpre}.log {params.logs_dir}/{params.outpre}_vcf.err
         """
 
 rule splitVCF:
     input:
         rules.convertVCF.output
     output:
-        [expand("output/imputation/{prefix}_chr{chr}.recode.vcf.gz", prefix = mergeName, chr = c) for c in range(1, 23)],
-        temp("output/imputation/" + mergeName + ".vcf.gz"),
-        temp("output/imputation/" + mergeName + ".vcf.gz.tbi")
+        temp(OUT("imputation", mergeName + ".vcf.gz")),
+        temp(OUT("imputation", mergeName + ".vcf.gz.tbi")),
+        expand(OUT("imputation", f"{mergeName}_chr{{chr}}.recode.vcf.gz"), chr=range(1, 23))
     params:
-        prefix = "output/imputation/" + mergeName,
+        prefix=OUT("imputation", mergeName),
+        samtools_ver=config['samtools']
     shell:
         """
-        module load samtools
+        module load samtools/{params.samtools_ver}
         module load vcftools
 
-        ## Compress vcf
         bgzip {input}
-
-        ## Index compressed vcf
         tabix -p vcf {params.prefix}.vcf.gz
         
-        ## Extract each chromosome separately
-        for chr in {{1..22}}
-        do
-	        vcftools --gzvcf {params.prefix}.vcf.gz --chr ${{chr}} --recode --recode-INFO-all --out {params.prefix}_chr${{chr}}
-	        bgzip {params.prefix}_chr${{chr}}.recode.vcf
+        for chr in {{1..22}}; do
+            vcftools --gzvcf {params.prefix}.vcf.gz --chr ${{chr}} --recode --recode-INFO-all --out {params.prefix}_chr${{chr}}
+            bgzip {params.prefix}_chr${{chr}}.recode.vcf
         done
         """
 
@@ -281,80 +291,92 @@ rule ldPrune:
     input:
         rules.qc.output
     output:
-        infile = temp("output/ancestry/" + mergeName + "_ldprune.prune.in"),
-        outfile = temp("output/ancestry/" + mergeName + "_ldprune.prune.out")
+        infile=temp(OUT("ancestry", mergeName + "_ldprune.prune.in")),
+        outfile=temp(OUT("ancestry", mergeName + "_ldprune.prune.out"))
     params:
-        prefix = "output/merge/" + mergeName + "_qc",
-        outpre = mergeName
+        prefix=OUT("merge", mergeName + "_qc"),
+        outpre=mergeName,
+        ancestry_dir=OUT("ancestry"),
+        logs_dir=OUT("ancestry", "logs")
     log:
-        out = "output/ancestry/logs/" + mergeName + "_ldprune.out"
+        out=OUT("ancestry", "logs", mergeName + "_ldprune.out")
     shell:
         """
-        mkdir -p output/ancestry/logs
-        ## Generate list of snps to prune
-        plink --bfile {params.prefix} --indep-pairwise 50 5 0.1 --out output/ancestry/{params.outpre}_ldprune 1> {log.out}
-        mv output/ancestry/{params.outpre}_ldprune.log output/ancestry/logs/{params.outpre}_ldprune.err
+        mkdir -p {params.logs_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.prefix} --indep-pairwise 50 5 0.1 --out {params.ancestry_dir}/{params.outpre}_ldprune 1> {log.out}
+        mv {params.ancestry_dir}/{params.outpre}_ldprune.log {params.logs_dir}/{params.outpre}_ldprune.err
         """
 
 rule pruneData:
     input:
         rules.qc.output,
-        ldList = rules.ldPrune.output.infile
+        ldList=rules.ldPrune.output.infile
     output:
-        bed=temp("output/ancestry/" + mergeName + "_ldautosome.bed"),
-        bim=temp("output/ancestry/" + mergeName + "_ldautosome.bim"),
-        fam=temp("output/ancestry/" + mergeName + "_ldautosome.fam")
+        bed=temp(OUT("ancestry", mergeName + "_ldautosome.bed")),
+        bim=temp(OUT("ancestry", mergeName + "_ldautosome.bim")),
+        fam=temp(OUT("ancestry", mergeName + "_ldautosome.fam"))
     params:
-        prefix = "output/merge/" + mergeName + "_qc",
-        outpre = mergeName
+        prefix=OUT("merge", mergeName + "_qc"),
+        outpre=mergeName,
+        ancestry_dir=OUT("ancestry"),
+        logs_dir=OUT("ancestry", "logs")
     log:
-        out = "output/ancestry/logs/" + mergeName + "_ldautosome.out"
+        out=OUT("ancestry", "logs", mergeName + "_ldautosome.out")
     shell:
         """
-        mkdir -p output/ancestry/logs
-        plink --bfile {params.prefix} --extract {input.ldList} --autosome --make-bed --out output/ancestry/{params.outpre}_ldautosome 1> {log.out}
-        mv output/ancestry/{params.outpre}_ldautosome.log output/ancestry/logs/{params.outpre}_ldautosome.err
+        mkdir -p {params.logs_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.prefix} --extract {input.ldList} --autosome --make-bed --out {params.ancestry_dir}/{params.outpre}_ldautosome 1> {log.out}
+        mv {params.ancestry_dir}/{params.outpre}_ldautosome.log {params.logs_dir}/{params.outpre}_ldautosome.err
         """
 
 rule pairwiseIBD:
     input: 
         rules.pruneData.output
     output:
-        "output/reports/" + mergeName + ".genome"
+        OUT("reports", mergeName + ".genome")
     params:
-        prefix = "output/ancestry/" + mergeName + "_ldautosome",
-        outpre = mergeName
+        prefix=OUT("ancestry", mergeName + "_ldautosome"),
+        outpre=mergeName,
+        reports_dir=OUT("reports")
     shell:
         """
-        mkdir -p output/reports
-        plink --bfile {params.prefix} --genome --out output/reports/{params.outpre}
-        rm output/reports/{params.outpre}.log
+        mkdir -p {params.reports_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.prefix} --genome --out {params.reports_dir}/{params.outpre}
+        rm {params.reports_dir}/{params.outpre}.log
         """
 
 rule pruneReference:
     input:
         rules.pruneData.output
     output:
-        bed=temp("output/ancestry/refPrune.bed"),
-        bim=temp("output/ancestry/refPrune.bim"),
-        fam=temp("output/ancestry/refPrune.fam")
+        bed=temp(OUT("ancestry", "refPrune.bed")),
+        bim=temp(OUT("ancestry", "refPrune.bim")),
+        fam=temp(OUT("ancestry", "refPrune.fam"))
     params:
-        prefix = "output/ancestry/" + mergeName + "_ldautosome",
-        outpre = mergeName,
-        ref = config['ref']
+        prefix=OUT("ancestry", mergeName + "_ldautosome"),
+        outpre=mergeName,
+        ref=config['ref'],
+        ancestry_dir=OUT("ancestry"),
+        logs_dir=OUT("ancestry", "logs")
     log:
-        out = "output/ancestry/logs/refPrune.out"
+        out=OUT("ancestry", "logs", "refPrune.out")
     shell:
         """
-        mkdir -p output/ancestry/logs
+        mkdir -p {params.logs_dir}
+        module load plink/{config[plink]}
 
-        ## Get list of variants from data
-        awk '{{print $1" "$4" "$4" "$2}}' {params.prefix}.bim > output/ancestry/{params.outpre}_list.txt
+        awk '{{print $1" "$4" "$4" "$2}}' {params.prefix}.bim > {params.ancestry_dir}/{params.outpre}_list.txt
 
-        plink --bfile {params.ref} --extract range output/ancestry/{params.outpre}_list.txt --make-bed --out output/ancestry/refPrune 1> {log.out}
-        mv output/ancestry/refPrune.log output/ancestry/logs/refPrune.err
+        plink --bfile {params.ref} --extract range {params.ancestry_dir}/{params.outpre}_list.txt --make-bed --out {params.ancestry_dir}/refPrune 1> {log.out}
+        mv {params.ancestry_dir}/refPrune.log {params.logs_dir}/refPrune.err
 
-        rm output/ancestry/{params.outpre}_list.txt
+        rm {params.ancestry_dir}/{params.outpre}_list.txt
         """
 
 rule setA1:
@@ -362,29 +384,31 @@ rule setA1:
         rules.pruneData.output,
         rules.pruneReference.output
     output:
-        bed = temp("output/ancestry/" + mergeName + "_ldautosome_A1.bed"),
-        bim = temp("output/ancestry/" + mergeName + "_ldautosome_A1.bim"),
-        fam = temp("output/ancestry/" + mergeName + "_ldautosome_A1.fam")
+        bed=temp(OUT("ancestry", mergeName + "_ldautosome_A1.bed")),
+        bim=temp(OUT("ancestry", mergeName + "_ldautosome_A1.bim")),
+        fam=temp(OUT("ancestry", mergeName + "_ldautosome_A1.fam"))
     params:
-        outpre = mergeName
+        outpre=mergeName,
+        ancestry_dir=OUT("ancestry"),
+        logs_dir=OUT("ancestry", "logs"),
+        python_ver=config['python']
     log:
-        out = "output/ancestry/logs/" + mergeName + "_ldautosome_A1.out"
+        out=OUT("ancestry", "logs", mergeName + "_ldautosome_A1.out")
     shell:
         """
-        module load python/3.9.6
-        ## Grab A1 info from reference data
-        awk '{{print $1":"$4" "$5}}' output/ancestry/refPrune.bim > output/ancestry/setA1.txt
+        mkdir -p {params.logs_dir}
+        module load python/{params.python_ver}
+        module load plink/{config[plink]}
         
-        ## Match positions in setA1 to data file positions and grab the variant IDs
-        python3 scripts/join.py output/ancestry/{params.outpre}_ldautosome.bim output/ancestry/setA1.txt output/ancestry/A1.txt
+        awk '{{print $1":"$4" "$5}}' {params.ancestry_dir}/refPrune.bim > {params.ancestry_dir}/setA1.txt
         
-        ## Set A1 allele in data
-        plink --bfile output/ancestry/{params.outpre}_ldautosome --a1-allele output/ancestry/A1.txt --make-bed --out output/ancestry/{params.outpre}_ldautosome_A1 1> {log.out}
+        python3 scripts/geno_workflow/join.py {params.ancestry_dir}/{params.outpre}_ldautosome.bim {params.ancestry_dir}/setA1.txt {params.ancestry_dir}/A1.txt
         
-        mv output/ancestry/{params.outpre}_ldautosome_A1.log output/ancestry/logs/{params.outpre}_ldautosome_A1.err
+        plink --bfile {params.ancestry_dir}/{params.outpre}_ldautosome --a1-allele {params.ancestry_dir}/A1.txt --make-bed --out {params.ancestry_dir}/{params.outpre}_ldautosome_A1 1> {log.out}
+        
+        mv {params.ancestry_dir}/{params.outpre}_ldautosome_A1.log {params.logs_dir}/{params.outpre}_ldautosome_A1.err
 
-        rm output/ancestry/setA1.txt
-        rm output/ancestry/A1.txt
+        rm {params.ancestry_dir}/setA1.txt {params.ancestry_dir}/A1.txt
         """
 
 rule mismatchAlleles:
@@ -392,52 +416,60 @@ rule mismatchAlleles:
         rules.pruneReference.output,
         rules.setA1.output.bed, rules.setA1.output.bim, rules.setA1.output.fam
     output:
-       temp(expand("output/ancestry/{name}{ext}", name = [mergeName + "_ldautosome_A1_final", "refPrune_final"], ext = [".bim", ".bed", ".fam"]))
+       temp(expand(OUT("ancestry", "{name}{ext}"), name=[mergeName + "_ldautosome_A1_final", "refPrune_final"], ext=[".bim", ".bed", ".fam"]))
     params:
-        outpre = mergeName
+        outpre=mergeName,
+        ancestry_dir=OUT("ancestry"),
+        logs_dir=OUT("ancestry", "logs"),
+        r_ver=config.get('r', '4.5.0')
     log:
-        out1 = "output/ancestry/logs/" + mergeName + "_mismatch.out",
-        out2 = "output/ancestry/logs/refPrune_mismatch.out"
+        out1=OUT("ancestry", "logs", mergeName + "_mismatch.out"),
+        out2=OUT("ancestry", "logs", "refPrune_mismatch.out")
     shell:
         """
-        module load r/4.3.1
-        Rscript scripts/mismatchAlleles.r output/ancestry/{params.outpre}_ldautosome_A1.bim output/ancestry/refPrune.bim
+        mkdir -p {params.logs_dir}
+        module load r/{params.r_ver}
+        module load plink/{config[plink]}
+        
+        Rscript scripts/geno_workflow/mismatchAlleles.r {params.ancestry_dir}/{params.outpre}_ldautosome_A1.bim {params.ancestry_dir}/refPrune.bim
 
-        plink --bfile output/ancestry/{params.outpre}_ldautosome_A1 --exclude output/ancestry/data_missnp.txt --make-bed --out output/ancestry/{params.outpre}_ldautosome_A1_final 1> {log.out1}
-        plink --bfile output/ancestry/refPrune --exclude output/ancestry/ref_missnp.txt --make-bed --out output/ancestry/refPrune_final 1> {log.out2}
+        plink --bfile {params.ancestry_dir}/{params.outpre}_ldautosome_A1 --exclude {params.ancestry_dir}/data_missnp.txt --make-bed --out {params.ancestry_dir}/{params.outpre}_ldautosome_A1_final 1> {log.out1}
+        plink --bfile {params.ancestry_dir}/refPrune --exclude {params.ancestry_dir}/ref_missnp.txt --make-bed --out {params.ancestry_dir}/refPrune_final 1> {log.out2}
 
-        mv output/ancestry/{params.outpre}_ldautosome_A1_final.log output/ancestry/logs/{params.outpre}_ldautosome_A1_final.err
-        mv output/ancestry/refPrune_final.log output/ancestry/logs/refPrune_final.err 
+        mv {params.ancestry_dir}/{params.outpre}_ldautosome_A1_final.log {params.logs_dir}/{params.outpre}_ldautosome_A1_final.err
+        mv {params.ancestry_dir}/refPrune_final.log {params.logs_dir}/refPrune_final.err 
 
-        rm output/ancestry/data_missnp.txt
-        rm output/ancestry/ref_missnp.txt
-        """        
+        rm {params.ancestry_dir}/data_missnp.txt {params.ancestry_dir}/ref_missnp.txt
+        """
 
 rule mergeDataReference:
     input:
         rules.mismatchAlleles.output
     output:
-        ped="output/ancestry/" + mergeName + "_ref_merge.ped",
-        mapf="output/ancestry/" + mergeName + "_ref_merge.map",
+        ped=OUT("ancestry", mergeName + "_ref_merge.ped"),
+        mapf=OUT("ancestry", mergeName + "_ref_merge.map"),
     params:
-        prefix = "output/ancestry/" + mergeName + "_ldautosome_A1_final",
-        outpre = mergeName
+        prefix=OUT("ancestry", mergeName + "_ldautosome_A1_final"),
+        outpre=mergeName,
+        ancestry_dir=OUT("ancestry"),
+        logs_dir=OUT("ancestry", "logs")
     log:
-        out = "output/ancestry/logs/" + mergeName + "_ref_merge.out"
+        out=OUT("ancestry", "logs", mergeName + "_ref_merge.out")
     shell:
         """
-        plink --bfile output/ancestry/refPrune_final --bmerge {params.prefix}.bed {params.prefix}.bim {params.prefix}.fam --merge-equal-pos --recode --out output/ancestry/{params.outpre}_ref_merge 1> {log.out}
-        mv output/ancestry/{params.outpre}_ref_merge.log output/ancestry/logs/{params.outpre}_ref_merge.err
+        mkdir -p {params.logs_dir}
+        module load plink/{config[plink]}
+        
+        plink --bfile {params.ancestry_dir}/refPrune_final --bmerge {params.prefix}.bed {params.prefix}.bim {params.prefix}.fam --merge-equal-pos --recode --out {params.ancestry_dir}/{params.outpre}_ref_merge 1> {log.out}
+        mv {params.ancestry_dir}/{params.outpre}_ref_merge.log {params.logs_dir}/{params.outpre}_ref_merge.err
 
-        ## Map file: Truncate variant names (2nd column) to 39 characters and convert 3rd column (distance in cM) to 0
-        awk '{{print $1, substr($2,1,39), "0", $4}}' output/ancestry/{params.outpre}_ref_merge.map > output/ancestry/{params.outpre}_ref_merge_temp.map
-        rm output/ancestry/{params.outpre}_ref_merge.map
-        mv output/ancestry/{params.outpre}_ref_merge_temp.map output/ancestry/{params.outpre}_ref_merge.map
+        awk '{{print $1, substr($2,1,39), "0", $4}}' {params.ancestry_dir}/{params.outpre}_ref_merge.map > {params.ancestry_dir}/{params.outpre}_ref_merge_temp.map
+        rm {params.ancestry_dir}/{params.outpre}_ref_merge.map
+        mv {params.ancestry_dir}/{params.outpre}_ref_merge_temp.map {params.ancestry_dir}/{params.outpre}_ref_merge.map
 
-        ## Ped file: Change 6th column (phenotype) to 1
-        awk '{{$6=1 ; print ;}}' output/ancestry/{params.outpre}_ref_merge.ped > output/ancestry/{params.outpre}_ref_merge_temp.ped
-        rm output/ancestry/{params.outpre}_ref_merge.ped
-        mv output/ancestry/{params.outpre}_ref_merge_temp.ped output/ancestry/{params.outpre}_ref_merge.ped
+        awk '{{$6=1 ; print ;}}' {params.ancestry_dir}/{params.outpre}_ref_merge.ped > {params.ancestry_dir}/{params.outpre}_ref_merge_temp.ped
+        rm {params.ancestry_dir}/{params.outpre}_ref_merge.ped
+        mv {params.ancestry_dir}/{params.outpre}_ref_merge_temp.ped {params.ancestry_dir}/{params.outpre}_ref_merge.ped
         """
         
 rule convertEigenstrat:
@@ -445,46 +477,48 @@ rule convertEigenstrat:
         ped=rules.mergeDataReference.output.ped,
         mapf=rules.mergeDataReference.output.mapf
     output:
-        "output/ancestry/" + mergeName + "_ref_merge.eigenstratgeno",
-        "output/ancestry/" + mergeName + "_ref_merge.snp",
-        "output/ancestry/" + mergeName + "_ref_merge.ind"
+        OUT("ancestry", mergeName + "_ref_merge.eigenstratgeno"),
+        OUT("ancestry", mergeName + "_ref_merge.snp"),
+        OUT("ancestry", mergeName + "_ref_merge.ind")
     params:
-        prefix = "output/ancestry/" + mergeName + "_ref_merge",
-        eigensoft = config['eigensoft']
+        prefix=OUT("ancestry", mergeName + "_ref_merge"),
+        eigensoft=config['eigensoft'],
+        ancestry_dir=OUT("ancestry")
     shell:
         """
-        echo "genotypename: "{input.ped} >> output/ancestry/par.PED.EIGENSTRAT
-        echo "snpname: "{input.mapf} >> output/ancestry/par.PED.EIGENSTRAT
-        echo "indivname: "{input.ped} >> output/ancestry/par.PED.EIGENSTRAT
-        echo "outputformat: EIGENSTRAT" >> output/ancestry/par.PED.EIGENSTRAT
-        echo "genotypeoutname: "{params.prefix}".eigenstratgeno" >> output/ancestry/par.PED.EIGENSTRAT
-        echo "snpoutname: "{params.prefix}".snp" >> output/ancestry/par.PED.EIGENSTRAT
-        echo "indivoutname: "{params.prefix}".ind" >> output/ancestry/par.PED.EIGENSTRAT
-        echo "familynames: NO" >> output/ancestry/par.PED.EIGENSTRAT
+        echo "genotypename: "{input.ped} >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "snpname: "{input.mapf} >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "indivname: "{input.ped} >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "outputformat: EIGENSTRAT" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "genotypeoutname: "{params.prefix}".eigenstratgeno" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "snpoutname: "{params.prefix}".snp" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "indivoutname: "{params.prefix}".ind" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "familynames: NO" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
 
-        {params.eigensoft}/convertf -p output/ancestry/par.PED.EIGENSTRAT
+        {params.eigensoft}/convertf -p {params.ancestry_dir}/par.PED.EIGENSTRAT
 
-        rm output/ancestry/par.PED.EIGENSTRAT
+        rm {params.ancestry_dir}/par.PED.EIGENSTRAT
         """
 
 rule runEigenstrat:
     input:
         rules.convertEigenstrat.output
     output:
-        "output/ancestry/" + mergeName + "_ref_merge.pca.evec",
-        "output/ancestry/" + mergeName + "_ref_merge.eval"
+        OUT("ancestry", mergeName + "_ref_merge.pca.evec"),
+        OUT("ancestry", mergeName + "_ref_merge.eval")
     params:
-        prefix = "output/ancestry/" + mergeName + "_ref_merge",
-        outpre = mergeName,
-        eigensoft = config['eigensoft']
+        prefix=OUT("ancestry", mergeName + "_ref_merge"),
+        outpre=mergeName,
+        eigensoft=config['eigensoft'],
+        logs_dir=OUT("ancestry", "logs")
     shell:
         """
-        ## Run smartpca with outlier removal turned off
+        mkdir -p {params.logs_dir}
+        
         {params.eigensoft}/smartpca.perl -i {params.prefix}.eigenstratgeno -a {params.prefix}.snp -b {params.prefix}.ind -o {params.prefix}.pca -p {params.prefix}.plot -e {params.prefix}.eval -l {params.prefix}.log -m 0
 
-        mv {params.prefix}.log output/ancestry/logs/{params.outpre}_smartpca.err
+        mv {params.prefix}.log {params.logs_dir}/{params.outpre}_smartpca.err
 
-        ## Remove first row from .pca.evec file
         sed '1d' {params.prefix}.pca.evec > tempfile
         rm {params.prefix}.pca.evec
         mv tempfile {params.prefix}.pca.evec
@@ -494,24 +528,17 @@ rule plotAncestry:
     input:
         rules.runEigenstrat.output
     output:
-        plot = "output/ancestry/" + mergeName + "_ancestry.pdf",
-        predictions = "output/ancestry/" + mergeName + "_predictedAncestry.csv"
+        plot=OUT("ancestry", mergeName + "_ancestry.pdf"),
+        predictions=OUT("ancestry", mergeName + "_predictedAncestry.csv")
     params:
-        panel = config['panel'],
-        pca = "output/ancestry/" + mergeName + "_ref_merge.pca.evec",
-        name = config['pop_name']
+        panel=config['panel'],
+        pca=OUT("ancestry", mergeName + "_ref_merge.pca.evec"),
+        name=config['pop_name'],
+        r_ver=config.get('r', '4.5.0'),
+        ancestry_dir=OUT("ancestry")
     shell:
         """
-        mkdir -p output/ancestry
-        module load r/4.4.0
-        Rscript scripts/getAncestry.r {params.pca} {params.panel} {params.name} {output.plot} {output.predictions}
+        mkdir -p {params.ancestry_dir}
+        module load r/{params.r_ver}
+        Rscript scripts/geno_workflow/getAncestry.r {params.pca} {params.panel} {params.name} {output.plot} {output.predictions}
         """
-
-
-
-
-
-
-
-
-

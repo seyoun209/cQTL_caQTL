@@ -1,0 +1,80 @@
+# config/profile_slurm/config.yaml
+printshellcmds: true
+use-envmodules: true
+rerun-incomplete: true
+latency-wait: 180
+jobs: 120
+keep-going: true
+
+# Use the simple built-in cluster executor
+executor: cluster-generic
+
+# Default resources (used when a rule doesn't override them)
+default-resources:
+  - mem_mb=4000        
+  - time="3-00:00:00"   # 3 days
+
+# Per-rule resource overrides (transcribed from your old cluster-config)
+set-resources:
+  align:
+    mem_mb: 16000
+  reheader:
+    mem_mb: 8000
+  mark_duplicates:
+    mem_mb: 50000
+    cpus_per_task: 4
+  collect_insert_size_metrics:
+    mem_mb: 6000
+  add_read_groups:
+    mem_mb: 6000
+  bam_qc:
+    mem_mb: 30000
+  verifybamid:
+    mem_mb: 15000
+    time: "11-00:00:00"
+  quant:
+    mem_mb: 4000
+  multiqc:
+    mem_mb: 4000
+  rocco_peaks:
+    mem_mb: 34000
+    time: "7-00:00:00"
+  signal:
+    mem_mb: 4000
+  mergeSignal:
+    mem_mb: 8000
+    time: "11-00:00:00"
+  mergeForwardSignal:
+    mem_mb: 16000
+    time: "11-00:00:00"
+  mergeReverseSignal:
+    mem_mb: 16000
+    time: "11-00:00:00"
+  mergeAlign:
+    mem_mb: 8000
+  find_intersecting_snps:
+    mem_mb: 16000
+  remap_wasp_reads:
+    mem_mb: 16000
+  filter_remapped_reads:
+    mem_mb: 32000
+  merge:
+    mem_mb: 6000
+  macs3_peaks:
+    mem_mb: 10000
+  hmmratac_peaks:
+    mem_mb: 20000
+  macs2_peaks:
+    mem_mb: 10000
+
+# How Snakemake submits each job
+cluster-generic-submit-cmd: >-
+  sbatch
+  -J smk-{rule}
+  -p general
+  -t {resources.time}
+  -c {threads}
+  --mem={resources.mem_mb}M
+  -o atac_output/logs_slurm/{rule}-%j.out
+  -e atac_output/logs_slurm/{rule}-%j.err
+  --parsable

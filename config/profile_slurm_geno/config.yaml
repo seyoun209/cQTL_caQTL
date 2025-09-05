@@ -1,0 +1,27 @@
+# config/profile_slurm_geno/config.yaml
+printshellcmds: true
+use-envmodules: true
+rerun-incomplete: true
+latency-wait: 180
+jobs: 120
+keep-going: true
+
+# Use the simple built-in cluster executor
+executor: cluster-generic
+
+# Default resources
+default-resources:
+  - mem_mb=16000
+  - time="3-00:00:00"   # 3 days
+
+# How Snakemake submits each job
+cluster-generic-submit-cmd: >-
+  sbatch
+  -J smk-{rule}
+  -p general
+  -t {resources.time}
+  -c {threads}
+  --mem={resources.mem_mb}M
+  -o geno_output/logs_slurm/{rule}-%j.out
+  -e geno_output/logs_slurm/{rule}-%j.err
+  --parsable
