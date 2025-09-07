@@ -69,7 +69,7 @@ rule removeSamples:
         subprocess.call(['python3', 'scripts/geno_workflow/removeSamples.py', params.removeSamples])
         
         for row in genos.itertuples():
-            cmd = f"plink --bfile {params.binary_dir}/{row.Batch} --remove remove.plink --make-bed --out {params.binary_dir}/{row.Batch}_filter 1> {params.logs_dir}/{row.Batch}_filter.out"
+            cmd = f"module load plink/{config['plink']} && plink --bfile {params.binary_dir}/{row.Batch} --remove remove.plink --make-bed --out {params.binary_dir}/{row.Batch}_filter 1> {params.logs_dir}/{row.Batch}_filter.out"
             p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             shutil.move(f"{params.binary_dir}/{row.Batch}_filter.log", f"{params.logs_dir}/{row.Batch}_filter.err")
 
@@ -99,7 +99,7 @@ rule mergeData:
             mergeList.write(f"{params.binary_dir}/{row.Batch}_filter\n")
         mergeList.close()
 
-        cmd = f"plink --bfile {params.binary_dir}/{params.file} --merge-list mergeList.txt --merge-equal-pos --make-bed --out {params.merge_dir}/{params.prefix} 1> {log.out}"
+        cmd = f"module load plink/{config['plink']} && plink --bfile {params.binary_dir}/{params.file} --merge-list mergeList.txt --merge-equal-pos --make-bed --out {params.merge_dir}/{params.prefix} 1> {log.out}"
         p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         i = 1
         while p.returncode != 0:
