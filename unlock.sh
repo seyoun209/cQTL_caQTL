@@ -15,9 +15,9 @@ case $1 in
             echo -e '\e[31mSpecify which workflow to unlock (i.e. run_RNAprocessing)'
             exit 2
             ;;
-        '01_ATAC_Preprocess_Run|01_ATAC_Preprocess_Run.sbatch')
+        '01_ATAC_Preprocess_Run' | '01_ATAC_Preprocess_Run.sbatch')
             ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/atac_process/00_atac_preprocess.smk --configfile "config/ATAC_config.yaml" --profile config/profile_slurm_atac
+            snakemake -j 1 --unlock -s workflow/atac_process/00_atac_preprocess.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
     'run_VCFpreprocessing')
             ## Unlock snakemake workflow
@@ -37,11 +37,11 @@ case $1 in
             ;;
     'signal' | 'run_signalTrack')
             ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/signal_track.smk --configfile "config/ATACconfig.yaml" --profile config/profile_slurm
+            snakemake -j 1 --unlock -s workflow/signal_track.smk --configfile config/ATACconfig.yaml --profile config/profile_slurm
             ;;
-    'peak' | 'run_peakcalling')
+    '01_genoPipe_Run.sbatch' | '01_geno')
             ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/peak_counting.smk --configfile "config/ATACconfig.yaml" --profile config/profile_slurm
+            snakemake -j 1 --unlock -s workflow/genotype_process/00_geno_filter.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno
             ;;
     'rna_signal' | 'run_RNAsignal')
             ## Unlock snakemake workflow

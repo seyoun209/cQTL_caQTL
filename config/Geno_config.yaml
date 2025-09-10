@@ -10,12 +10,16 @@ hwe: .000001 # PLINK --hwe: Hardy-Weinberg equilibrium p-value threshold
 remove: 'remove.txt' # Text file listing samples to remove
 
 ## Genome-specific reference parameters (GRCh38)
-ref: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/ALL/all_snps/1000G.GRCh38.20190312_chrAll_id'
-panel: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/1000G_phase3.Updatedpanel'
-sequence: '/users/s/e/seyoun/Ref/genome/GRCh38.primary_assembly.genome.fa'
+#ref: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/ALL/all_snps/1000G.GRCh38.20190312_chrAll_id'
+#panel: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/1000G_phase3.Updatedpanel'
+#sequence: '/users/s/e/seyoun/Ref/genome/GRCh38.primary_assembly.genome.fa'
+#add_chr: '/work/users/s/e/seyoun/cQTL_caQTL/workflow/genotype_process/addchr.txt'
 
-## Eigensoft software path
-eigensoft: '/work/users/s/e/seyoun/cQTL_caQTL/tools/bin'
+## Genome-specific reference parameters (GRCh37)
+ref: '/proj/phanstiel_lab/References/genomes/1000G/GRCh37/ALL/all_snps/1000G_phase3_chrALL'
+panel: '/proj/phanstiel_lab/References/genomes/1000G/GRCh37/1000G_phase3.panel'
+sequence: '/proj/phanstiel_lab/Reference/human/hg19/fasta/GRCh37.p13.genome.fa'
+add_chr: '/work/users/s/e/seyoun/cQTL_caQTL/workflow/genotype_process/addchr.txt'
 
 ## Additional options
 pop_name: 'CQTL' # Name of data 'population' for ancestry PCA plot
@@ -31,5 +35,8 @@ paths:
 # Software versions
 python: "3.12.4"
 plink: "1.90b6.21"
+plink2: "2.0.0-a.6.13"
 bcftools: "1.22"
 samtools: "1.22"
+r: "4.5.0"
+eigensoft: "8.0.0"

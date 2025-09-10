@@ -32,7 +32,7 @@ onsuccess:
 
 rule all:
     input:
-        expand(OUT("imputation", f"{mergeName}_chr{{chr}}.recode.vcf.gz"), chr=range(1, 23)),
+        expand(OUT("imputation", f"{mergeName}_chr{{chr}}_hg38.vcf.gz"), chr=range(1, 23)),
         OUT("reports", mergeName + ".sexcheck"),
         OUT("reports", mergeName + ".genome"),
         OUT("ancestry", mergeName + "_ref_merge.pca.evec"),
@@ -54,7 +54,6 @@ rule convertBinary:
             cmd = f"module load plink/{config['plink']} && plink --file {row.Name} --make-bed --allow-extra-chr --out {params.binary_dir}/{row.Batch} 1> {params.logs_dir}/{row.Batch}_binary.out"
             p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             shutil.move(f"{params.binary_dir}/{row.Batch}.log", f"{params.logs_dir}/{row.Batch}_binary.err")
-
 rule removeSamples:
     input:
         rules.convertBinary.output
@@ -64,67 +63,82 @@ rule removeSamples:
     params:
         removeSamples=config['remove'],
         binary_dir=OUT("binary"),
-        logs_dir=OUT("binary", "logs")
+        logs_dir=OUT("binary", "logs"),
+        plink_ver=config['plink']
     run:
+        # Generate remove.plink file (empty if no samples to remove)
         subprocess.call(['python3', 'scripts/geno_workflow/removeSamples.py', params.removeSamples])
-        
+
+        # Check if there are samples to remove
+        has_samples_to_remove = os.path.exists("remove.plink") and bool(open("remove.plink").read().strip())
+
+        # Process each batch
         for row in genos.itertuples():
-            cmd = f"module load plink/{config['plink']} && plink --bfile {params.binary_dir}/{row.Batch} --remove remove.plink --make-bed --out {params.binary_dir}/{row.Batch}_filter 1> {params.logs_dir}/{row.Batch}_filter.out"
-            p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            shutil.move(f"{params.binary_dir}/{row.Batch}_filter.log", f"{params.logs_dir}/{row.Batch}_filter.err")
+            batch_base = f"{params.binary_dir}/{row.Batch}"
+            filter_file = f"{batch_base}_filter"
+
+            # Step 1: Remove samples if needed
+            if has_samples_to_remove:
+                cmd = f"module load plink/{params.plink_ver} && plink --bfile {batch_base} --remove remove.plink --make-bed --out {filter_file}"
+            else:
+                cmd = f"module load plink/{params.plink_ver} && plink --bfile {batch_base} --make-bed --out {filter_file}"
+            subprocess.run(cmd, shell=True, check=True)
+
+            # Step 2: Clean variant IDs for merging
+            clean_file = f"{params.binary_dir}/{row.Batch}_clean"
+            clean_cmd = f"module load plink/{params.plink_ver} && plink --bfile {filter_file} --set-missing-var-ids @:# --make-bed --out {clean_file}"
+            subprocess.run(clean_cmd, shell=True, check=True)
 
 rule mergeData:
     input:
-        rules.removeSamples.output
+        geno_csv="geno.csv"
     output:
-        temp("mergeList.txt"),
-        bed=temp(OUT("merge", mergeName + ".bed")),
-        bim=temp(OUT("merge", mergeName + ".bim")),
-        fam=temp(OUT("merge", mergeName + ".fam"))
+        bed=f"{params.merge_dir}/{params.prefix}.bed",
+        bim=f"{params.merge_dir}/{params.prefix}.bim",
+        fam=f"{params.merge_dir}/{params.prefix}.fam"
     params:
-        file=genos.loc[0, "Batch"] + "_filter", 
-        prefix=mergeName,
-        binary_dir=OUT("binary"),
-        merge_dir=OUT("merge"),
-        logs_dir=OUT("merge", "logs"),
-        reports_dir=OUT("reports")
-    log:
-        out=OUT("merge", "logs", mergeName + ".out")
+        merge_dir=params.merge_dir,
+        binary_dir=params.binary_dir,
+        plink_ver=params.plink_ver,
+        prefix=params.prefix
     run:
-        os.makedirs(params.logs_dir, exist_ok=True)
-        os.makedirs(params.reports_dir, exist_ok=True)
+        import pandas as pd, os, subprocess, shutil
 
-        mergeList = open('mergeList.txt', 'w')
-        for row in genos[1:].itertuples():
-            mergeList.write(f"{params.binary_dir}/{row.Batch}_filter\n")
-        mergeList.close()
+        # Load batches
+        genos = pd.read_csv(input.geno_csv)
 
-        cmd = f"module load plink/{config['plink']} && plink --bfile {params.binary_dir}/{params.file} --merge-list mergeList.txt --merge-equal-pos --make-bed --out {params.merge_dir}/{params.prefix} 1> {log.out}"
-        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        i = 1
-        while p.returncode != 0:
-            grep = f"cat {params.merge_dir}/{mergeName}.log | tr '\\r\\n' ' ' | grep -o 'Error: --merge-equal-pos failure.  Variants .*' | awk '{{print $5}}' | tr -d \"'\" >> mergeFails.txt && cat {params.merge_dir}/{mergeName}.log | tr '\\r\\n' ' ' | grep -o 'Error: --merge-equal-pos failure.  Variants .*' | awk '{{print $7}}' | tr -d \"'\" >> mergeFails.txt"
-            p1 = subprocess.run(grep, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        os.makedirs(params.merge_dir, exist_ok=True)
 
-            mergeList = open('mergeList.txt', 'w')
-            for row in genos.itertuples():
-                if i != 1:
-                    for f in glob.glob(f"{params.binary_dir}/{row.Batch}_filter_{i-1}.*"):
-                        os.remove(f)
-                plink_subset = f"plink --bfile {params.binary_dir}/{row.Batch}_filter --exclude mergeFails.txt --make-bed --out {params.binary_dir}/{row.Batch}_filter_{i} 1> {params.logs_dir}/resubset.out"
-                p2 = subprocess.run(plink_subset, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                if row.Index > 0:
-                    mergeList.write(f"{params.binary_dir}/{row.Batch}_filter_{i}\n")
-            mergeList.close()
+        # Only one batch → just copy
+        if len(genos) == 1:
+            batch = genos.loc[0, "Batch"]
+            for ext in [".bed", ".bim", ".fam"]:
+                shutil.copy2(f"{params.binary_dir}/{batch}_clean{ext}",
+                             f"{params.merge_dir}/{params.prefix}{ext}")
+            with open("mergeList.txt", "w") as f:
+                pass
+        else:
+            # Write merge list
+            with open("mergeList.txt", "w") as f:
+                for row in genos[1:].itertuples():
+                    f.write(f"{params.binary_dir}/{row.Batch}_clean\n")
 
-            remerge = f"plink --bfile {params.binary_dir}/{params.file}_{i} --merge-list mergeList.txt --merge-equal-pos --make-bed --out {params.merge_dir}/{params.prefix} 1>{log.out}"   
-            p = subprocess.run(remerge, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            i += 1
-            
-        shutil.move("mergeFails.txt", f"{params.reports_dir}/{mergeName}_mergeFails.txt")
-        shutil.move(f"{params.merge_dir}/{mergeName}.log", f"{params.logs_dir}/{mergeName}.err")
-        if os.path.exists(f"{params.logs_dir}/resubset.out"):
-            os.remove(f"{params.logs_dir}/resubset.out")
+            # Run PLINK merge
+            first_batch = f"{params.binary_dir}/{genos.loc[0, 'Batch']}_clean"
+            merged_out = f"{params.merge_dir}/{params.prefix}"
+
+            cmd = (
+                f"module load plink/{params.plink_ver} && "
+                f"plink --bfile {first_batch} "
+                f"--merge-list mergeList.txt "
+                f"--merge-equal-pos --make-bed "
+                f"--out {merged_out}"
+            )
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                print(result.stderr)
+                raise RuntimeError("PLINK merge failed")
 
 rule qc:
     input:
@@ -220,8 +234,10 @@ rule snpFlip:
 
 rule flipSnps:
     input:
-        rules.autosomePrune.output, 
-        rules.snpFlip.output.rev
+        bed=rules.autosomePrune.output.bed,
+        bim=rules.autosomePrune.output.bim,
+        fam=rules.autosomePrune.output.fam,
+        flip_file=rules.snpFlip.output.rev
     output:
         bed=temp(OUT("imputation", mergeName + "_qcautosome_snpflip.bed")),
         bim=temp(OUT("imputation", mergeName + "_qcautosome_snpflip.bim")),
@@ -238,8 +254,11 @@ rule flipSnps:
         mkdir -p {params.logs_dir}
         module load plink/{config[plink]}
         
-        plink --bfile {params.prefix} --flip {input[1]} --make-bed --out {params.imputation_dir}/{params.outpre}_qcautosome_snpflip 1> {log.out}
-        mv {params.imputation_dir}/{params.outpre}_qcautosome_snpflip.log {params.logs_dir}/{params.outpre}_qcautosome_snpflip.err 
+        plink --bfile {params.prefix} --flip {input.flip_file} --make-bed --out {params.imputation_dir}/{params.outpre}_qcautosome_snpflip 1> {log.out}
+        
+        if [[ -f {params.imputation_dir}/{params.outpre}_qcautosome_snpflip.log ]]; then
+            mv {params.imputation_dir}/{params.outpre}_qcautosome_snpflip.log {params.logs_dir}/{params.outpre}_qcautosome_snpflip.err
+        fi
         """
 
 rule convertVCF:
@@ -263,27 +282,51 @@ rule convertVCF:
         mv {params.imputation_dir}/{params.outpre}.log {params.logs_dir}/{params.outpre}_vcf.err
         """
 
+rule addChrPrefix:
+    input:
+        vcf=rules.convertVCF.output
+    output:
+        temp(OUT("imputation", mergeName + "_chr.vcf.gz"))
+    params:
+        temp_vcf=OUT("imputation", mergeName + "_chr.vcf"),
+        mapping_file=config['add_chr'],
+        samtools_ver=config['samtools']
+    log:
+        out=OUT("imputation", "logs", mergeName + "_addchr.out")
+    shell:
+        """
+        module load samtools/{params.samtools_ver}
+
+        # Use bcftools to rename chromosomes with your existing mapping file
+        bcftools annotate --rename-chrs {params.mapping_file} {input.vcf} -o {params.temp_vcf} 2> {log.out}
+
+        # Compress the output
+        bgzip {params.temp_vcf}
+
+        echo "Successfully added chr prefix using bcftools with addchr.txt" >> {log.out}
+        """
+
 rule splitVCF:
     input:
-        rules.convertVCF.output
+        rules.addChrPrefix.output
     output:
-        temp(OUT("imputation", mergeName + ".vcf.gz")),
-        temp(OUT("imputation", mergeName + ".vcf.gz.tbi")),
-        expand(OUT("imputation", f"{mergeName}_chr{{chr}}.recode.vcf.gz"), chr=range(1, 23))
+        temp(OUT("imputation", mergeName + "_chr.vcf.gz.tbi")),
+        expand(OUT("imputation", f"{mergeName}_chr{{chr}}_hg38.vcf.gz"), chr=range(1, 23))
     params:
-        prefix=OUT("imputation", mergeName),
+        input_vcf=OUT("imputation", mergeName + "_chr.vcf.gz"),
+        output_prefix=OUT("imputation", mergeName),
         samtools_ver=config['samtools']
     shell:
         """
         module load samtools/{params.samtools_ver}
         module load vcftools
 
-        bgzip {input}
-        tabix -p vcf {params.prefix}.vcf.gz
+        tabix -p vcf {params.input_vcf}
         
         for chr in {{1..22}}; do
-            vcftools --gzvcf {params.prefix}.vcf.gz --chr ${{chr}} --recode --recode-INFO-all --out {params.prefix}_chr${{chr}}
-            bgzip {params.prefix}_chr${{chr}}.recode.vcf
+            vcftools --gzvcf {params.input_vcf} --chr chr${{chr}} --recode --recode-INFO-all --out {params.output_prefix}_chr${{chr}}_hg38_temp
+            mv {params.output_prefix}_chr${{chr}}_hg38_temp.recode.vcf {params.output_prefix}_chr${{chr}}_hg38.vcf
+            bgzip {params.output_prefix}_chr${{chr}}_hg38.vcf
         done
         """
 
@@ -421,7 +464,7 @@ rule mismatchAlleles:
         outpre=mergeName,
         ancestry_dir=OUT("ancestry"),
         logs_dir=OUT("ancestry", "logs"),
-        r_ver=config.get('r', '4.5.0')
+        r_ver=config['r']
     log:
         out1=OUT("ancestry", "logs", mergeName + "_mismatch.out"),
         out2=OUT("ancestry", "logs", "refPrune_mismatch.out")
@@ -482,20 +525,22 @@ rule convertEigenstrat:
         OUT("ancestry", mergeName + "_ref_merge.ind")
     params:
         prefix=OUT("ancestry", mergeName + "_ref_merge"),
-        eigensoft=config['eigensoft'],
+        eig_ver=config['eigensoft'],
         ancestry_dir=OUT("ancestry")
     shell:
         """
-        echo "genotypename: "{input.ped} >> {params.ancestry_dir}/par.PED.EIGENSTRAT
-        echo "snpname: "{input.mapf} >> {params.ancestry_dir}/par.PED.EIGENSTRAT
-        echo "indivname: "{input.ped} >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        module load eigensoft/{params.eig_ver}
+        
+        echo "genotypename: {input.ped}" > {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "snpname: {input.mapf}" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "indivname: {input.ped}" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
         echo "outputformat: EIGENSTRAT" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
-        echo "genotypeoutname: "{params.prefix}".eigenstratgeno" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
-        echo "snpoutname: "{params.prefix}".snp" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
-        echo "indivoutname: "{params.prefix}".ind" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "genotypeoutname: {params.prefix}.eigenstratgeno" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "snpoutname: {params.prefix}.snp" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
+        echo "indivoutname: {params.prefix}.ind" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
         echo "familynames: NO" >> {params.ancestry_dir}/par.PED.EIGENSTRAT
 
-        {params.eigensoft}/convertf -p {params.ancestry_dir}/par.PED.EIGENSTRAT
+        convertf -p {params.ancestry_dir}/par.PED.EIGENSTRAT
 
         rm {params.ancestry_dir}/par.PED.EIGENSTRAT
         """
@@ -509,19 +554,24 @@ rule runEigenstrat:
     params:
         prefix=OUT("ancestry", mergeName + "_ref_merge"),
         outpre=mergeName,
-        eigensoft=config['eigensoft'],
+        eig_ver=config['eigensoft'],
         logs_dir=OUT("ancestry", "logs")
     shell:
         """
         mkdir -p {params.logs_dir}
+        module load eigensoft/{params.eig_ver}
         
-        {params.eigensoft}/smartpca.perl -i {params.prefix}.eigenstratgeno -a {params.prefix}.snp -b {params.prefix}.ind -o {params.prefix}.pca -p {params.prefix}.plot -e {params.prefix}.eval -l {params.prefix}.log -m 0
 
-        mv {params.prefix}.log {params.logs_dir}/{params.outpre}_smartpca.err
+        smartpca.perl -i {params.prefix}.eigenstratgeno -a {params.prefix}.snp -b {params.prefix}.ind -o {params.prefix}.pca -p {params.prefix}.plot -e {params.prefix}.eval -l {params.prefix}.log -m 0
+
+        if [[ -f {params.prefix}.log ]]; then
+            mv {params.prefix}.log {params.logs_dir}/{params.outpre}_smartpca.err
+        fi
 
         sed '1d' {params.prefix}.pca.evec > tempfile
         rm {params.prefix}.pca.evec
         mv tempfile {params.prefix}.pca.evec
+
         """
 
 rule plotAncestry:
@@ -534,7 +584,7 @@ rule plotAncestry:
         panel=config['panel'],
         pca=OUT("ancestry", mergeName + "_ref_merge.pca.evec"),
         name=config['pop_name'],
-        r_ver=config.get('r', '4.5.0'),
+        r_ver=config['r'],
         ancestry_dir=OUT("ancestry")
     shell:
         """

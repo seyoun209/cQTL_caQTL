@@ -17,6 +17,9 @@ joined <- inner_join(data, ref, by = c("V1", "V4"))
 # Compare alleles (V5.x and V5.y & V6.x and V6.y)
 missnps <- joined[which(joined$V5.x != joined$V5.y | joined$V6.x != joined$V6.y),]
 
+# Get output directory from input file path
+output_dir <- dirname(args[1])
+
 # Write lists of snps to txt files to remove from data/reference
-write.table(missnps$V2.x, file = "output/ancestry/data_missnp.txt", quote = FALSE, col.names = FALSE, row.names = FALSE)
-write.table(missnps$V2.y, file = "output/ancestry/ref_missnp.txt", quote = FALSE, col.names = FALSE, row.names = FALSE)
+write.table(missnps$V2.x, file = file.path(output_dir, "data_missnp.txt"), quote = FALSE, col.names = FALSE, row.names = FALSE)
+write.table(missnps$V2.y, file = file.path(output_dir, "ref_missnp.txt"), quote = FALSE, col.names = FALSE, row.names = FALSE)

@@ -7,6 +7,7 @@ fileNamesFrom: ['Proj','Donor','Condition','Tissue','Protocol_notes']
 
 paths:
   outdir: atac_output
+  base_dir: '/work/users/s/e/seyoun/cQTL_caQTL' # Setting up for WASP
 
 bwa_index: '/users/s/e/seyoun/Ref/genome/bwa_idx/hg38'
 blacklist: '/work/users/s/e/seyoun/cQTL_caQTL/external/blacklist_region/ENCFF356LFX.bed.gz'
@@ -15,6 +16,26 @@ atac_qc_Rscript: '/work/users/s/e/seyoun/cQTL_caQTL/scripts/atac_workflow/atac_b
 
 #atacqv
 tssextension: '2000'
+
+# Processing options
+processing_options:
+  run_standard: true        # Run standard processing (no WASP)
+  run_wasp: true           # Run WASP processing
+  run_replicates: true     # Include replicate/femur samples
+  exclude_replicates: false
+  exclude_femur: false
+
+# Peak calling tools to use
+peak_callers: ['macs2'] # Options: ['macs2', 'macs3', 'hmmratac', 'rocco']
+
+
+## WASP-specific paths (only needed if run_wasp: true)
+wasp_options:
+  wasp_dir: '/nas/longleaf/rhel9/apps/wasp/2023-02'
+  chrom_size: '/users/s/e/seyoun/Ref/genome/chrsize_onlychr.txt'
+  # VCF paths for WASP (will be auto-generated from genotype processing)
+  vcf_copy: '/path/to/your/vcf/files'
+
 
 #deeptools
 bin_size: '10'
