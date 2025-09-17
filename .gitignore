@@ -1,10 +1,12 @@
 env/
 tools/
 *.txt
+*.csv
 external/*
 atac_output/*
 rna_output/*
 geno_output/*
 hic_output/*
 output/
+hg19_geno_output/*
 workflow_logs/*

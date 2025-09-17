@@ -4,29 +4,39 @@
 geno: 'geno.csv'
 
 ## Thresholds for variant inclusion in PLINK
-miss_call: 0.1 # PLINK --geno: Missing rate per SNP; 90% genotyping rate (10% missing)
+miss_call: 0.01 # PLINK --geno: Missing rate per SNP; 90% genotyping rate (10% missing)
 maf: 0.01 # PLINK --maf: Minor allele frequency >= 0.01
 hwe: .000001 # PLINK --hwe: Hardy-Weinberg equilibrium p-value threshold
 remove: 'remove.txt' # Text file listing samples to remove
 
 ## Genome-specific reference parameters (GRCh38)
-#ref: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/ALL/all_snps/1000G.GRCh38.20190312_chrAll_id'
-#panel: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/1000G_phase3.Updatedpanel'
-#sequence: '/users/s/e/seyoun/Ref/genome/GRCh38.primary_assembly.genome.fa'
-#add_chr: '/work/users/s/e/seyoun/cQTL_caQTL/workflow/genotype_process/addchr.txt'
+ref: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/ALL/all_snps/1000G.GRCh38.20190312_chrAll_id'
+panel: '/proj/phanstiel_lab/References/genomes/1000G/GRCh38/1000G_phase3.Updatedpanel'
+sequence: '/proj/phanstiel_lab/Reference/human/hg38/fasta/GRCh38.primary_assembly.genome.fa'
+add_chr: '/work/users/s/e/seyoun/cQTL_caQTL/workflow/genotype_process/addchr.txt'
 
 ## Genome-specific reference parameters (GRCh37)
-ref: '/proj/phanstiel_lab/References/genomes/1000G/GRCh37/ALL/all_snps/1000G_phase3_chrALL'
-panel: '/proj/phanstiel_lab/References/genomes/1000G/GRCh37/1000G_phase3.panel'
-sequence: '/proj/phanstiel_lab/Reference/human/hg19/fasta/GRCh37.p13.genome.fa'
-add_chr: '/work/users/s/e/seyoun/cQTL_caQTL/workflow/genotype_process/addchr.txt'
+#ref: '/proj/phanstiel_lab/References/genomes/1000G/GRCh37/ALL/all_snps/1000G_phase3_chrALL'
+#panel: '/proj/phanstiel_lab/References/genomes/1000G/GRCh37/1000G_phase3.panel'
+#sequence: '/proj/phanstiel_lab/Reference/human/hg19/fasta/GRCh37.p13.genome.fa'
+#add_chr: '/work/users/s/e/seyoun/cQTL_caQTL/workflow/genotype_process/addchr.txt'
+
+## HRC/1000G check tool paths (hg19)
+#rayner_script: '/users/s/e/seyoun/Ref/1000g/1000g_hrc/HRC-1000G-check-bim.pl'
+#rayner_legend: '/users/s/e/seyoun/Ref/1000g/1000g_hrc/1000GP_Phase3_combined.legend.gz'
+
+## HRC/1000G check tool paths (hg38)
+rayner_script: '/users/s/e/seyoun/Ref/1000g/1000g_hrc/HRC-1000G-check-bim.pl'
+rayner_legend: '/users/s/e/seyoun/Ref/1000g/1000g_hrc/hg38_references/PASS.Variantsbravo-dbsnp-all.tab.gz'
 
 ## Additional options
 pop_name: 'CQTL' # Name of data 'population' for ancestry PCA plot
 
-# IMPUTATION PROCESSING
-## Path to imputed genotyping data samplesheet
-vcf: 'vcf_list_hg38.csv'
+
+# Post-imputation processing
+post_imputation_dir: "/work/users/s/e/seyoun/cQTL_caQTL/geno_output/imputation/michigan_imputation"
+zip_password: "A!6OwNpas(B0gT"
+final_vcf_name: "CQTL_COA9_10"
 
 # Output directories
 paths:
@@ -34,6 +44,7 @@ paths:
 
 # Software versions
 python: "3.12.4"
+perl: "5.32.1"
 plink: "1.90b6.21"
 plink2: "2.0.0-a.6.13"
 bcftools: "1.22"

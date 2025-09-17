@@ -6,22 +6,11 @@ import os
 def OUT(*parts):
     return os.path.join(config["paths"]["genotype_outdir"], *[p for p in parts if p])
 
-## Read in samplesheet
-genos = pd.read_csv(config["geno"], sep=",")
-genos = genos.astype(str)
-
-## Read in samplesheet with imputed vcfs
-vcfs = pd.read_csv(config["vcf"], sep=",")
-vcfs = vcfs.astype(str)
-
-## Grab vcf paths for all chromosomes
-vcf_paths = vcfs['vcf_path'].tolist()
-
-mergeName = '_'.join(genos.Proj.unique()) + '_' + '_'.join(genos['Batch'].unique())
+mergeName = config["final_vcf_name"]
+POST_IMPUTATION_DIR = config["post_imputation_dir"]
 
 onsuccess:
     print("Imputed VCFs processed successfully!")
-    print(f"QC'd VCFs ready for allelic imbalance or QTL mapping pipelines.")
     print(f"Final output: {OUT('vcf', mergeName + '_ALL_qc.vcf.gz')}")
 
 rule all:
@@ -29,28 +18,50 @@ rule all:
         OUT('vcf', mergeName + '_ALL_qc.vcf.gz'),
         OUT('reports', mergeName + '_ALL_qc_VCFreport.txt')
 
+rule unzip_files:
+    output:
+        expand(POST_IMPUTATION_DIR + "/chr{chr}.dose.vcf.gz", chr=range(1, 23))
+    params:
+        post_dir=POST_IMPUTATION_DIR,
+        zip_password=config['zip_password']
+    shell:
+        """
+        # Unzip all chromosome files with password
+        for chr in {{1..22}}; do
+            if [[ -f "{params.post_dir}/chr_${{chr}}.zip" ]]; then
+                echo "Extracting chr_${{chr}}.zip"
+                unzip -o -P "{params.zip_password}" "{params.post_dir}/chr_${{chr}}.zip" -d "{params.post_dir}/"
+            fi
+        done
+        """
+
 rule concat_vcf:
-    input: 
-        vcf_paths
+    input:
+        rules.unzip_files.output
     output:
         OUT('vcf', mergeName + '_ALL.vcf.gz')
     params:
-        prefix=mergeName,
-        vcf_dir=OUT('vcf'),
+        post_dir=POST_IMPUTATION_DIR,
         temp_vcf=OUT('vcf', mergeName + '_ALL.vcf'),
-        samtools_ver=config['samtools']
+        samtools_ver=config['samtools'],
+        vcf_dir=OUT('vcf')
     log:
         err=OUT("logs", "concat_vcf.err"),
         out=OUT("logs", "concat_vcf.out")
-    threads: 4
     shell:
         """
         module load samtools/{params.samtools_ver}
         mkdir -p {params.vcf_dir}
-        
-        bcftools concat -o {params.temp_vcf} {input} 1> {log.out} 2> {log.err}
+
+        # Create file list for concatenation
+        vcf_list=""
+        for chr in {{1..22}}; do
+            vcf_list="$vcf_list {params.post_dir}/chr${{chr}}.dose.vcf.gz"
+        done
+
+        bcftools concat $vcf_list | bcftools annotate --set-id '%CHROM:%POS:%REF:%ALT' -o {params.temp_vcf}
         bgzip {params.temp_vcf}
-        """      
+        """
 
 rule qc_vcf:
     input:

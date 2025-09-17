@@ -32,7 +32,7 @@ onsuccess:
 
 rule all:
     input:
-        expand(OUT("imputation", f"{mergeName}_chr{{chr}}_hg38.vcf.gz"), chr=range(1, 23)),
+        expand(OUT("imputation", f"{mergeName}_chr{{chr}}.vcf.gz"), chr=range(1, 23)),
         OUT("reports", mergeName + ".sexcheck"),
         OUT("reports", mergeName + ".genome"),
         OUT("ancestry", mergeName + "_ref_merge.pca.evec"),
@@ -46,19 +46,21 @@ rule convertBinary:
         temp(expand(OUT("binary", "{name}{ext}"), name=genos['Batch'], ext=[".bed",".bim",".fam"]))
     params:
         binary_dir=OUT("binary"),
-        logs_dir=OUT("binary", "logs")
+        logs_dir=OUT("binary", "logs"),
+        plink_ver=config['plink']
     run:
         os.makedirs(params.logs_dir, exist_ok=True)
         for row in genos.itertuples():
-            # Use the exact same approach as your working version, just with module loading
-            cmd = f"module load plink/{config['plink']} && plink --file {row.Name} --make-bed --allow-extra-chr --out {params.binary_dir}/{row.Batch} 1> {params.logs_dir}/{row.Batch}_binary.out"
+            cmd = f"module load plink/{params.plink_ver} && plink --file {row.Name} --make-bed --allow-extra-chr --out {params.binary_dir}/{row.Batch}"
             p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            shutil.move(f"{params.binary_dir}/{row.Batch}.log", f"{params.logs_dir}/{row.Batch}_binary.err")
+            if os.path.exists(f"{params.binary_dir}/{row.Batch}.log"):
+                shutil.move(f"{params.binary_dir}/{row.Batch}.log", f"{params.logs_dir}/{row.Batch}_binary.err")
+
 rule removeSamples:
     input:
         rules.convertBinary.output
     output:
-        temp(expand(OUT("binary", "{name}_filter{ext}"), name=genos['Batch'], ext=[".bed",".bim",".fam"])),
+        temp(expand(OUT("binary", "{name}_clean{ext}"), name=genos['Batch'], ext=[".bed",".bim",".fam"])),
         removeFile=temp("remove.plink")
     params:
         removeSamples=config['remove'],
@@ -66,79 +68,87 @@ rule removeSamples:
         logs_dir=OUT("binary", "logs"),
         plink_ver=config['plink']
     run:
-        # Generate remove.plink file (empty if no samples to remove)
-        subprocess.call(['python3', 'scripts/geno_workflow/removeSamples.py', params.removeSamples])
-
+        import os
+        import subprocess
+        import shutil
+        
+        os.makedirs(params.logs_dir, exist_ok=True)
+        
+        # Generate remove.plink file
+        result = subprocess.run(['python3', 'scripts/geno_workflow/removeSamples.py', params.removeSamples], 
+                              capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"removeSamples.py failed: {result.stderr}")
+            # Create empty remove.plink on failure
+            with open("remove.plink", "w") as f:
+                pass
+        
         # Check if there are samples to remove
         has_samples_to_remove = os.path.exists("remove.plink") and bool(open("remove.plink").read().strip())
 
         # Process each batch
         for row in genos.itertuples():
             batch_base = f"{params.binary_dir}/{row.Batch}"
-            filter_file = f"{batch_base}_filter"
+            clean_file = f"{batch_base}_clean"
 
-            # Step 1: Remove samples if needed
+            # Remove samples and clean variant IDs in one step
             if has_samples_to_remove:
-                cmd = f"module load plink/{params.plink_ver} && plink --bfile {batch_base} --remove remove.plink --make-bed --out {filter_file}"
+                cmd = f"module load plink/{params.plink_ver} && plink --bfile {batch_base} --remove remove.plink --set-missing-var-ids @:# --make-bed --out {clean_file}"
             else:
-                cmd = f"module load plink/{params.plink_ver} && plink --bfile {batch_base} --make-bed --out {filter_file}"
-            subprocess.run(cmd, shell=True, check=True)
-
-            # Step 2: Clean variant IDs for merging
-            clean_file = f"{params.binary_dir}/{row.Batch}_clean"
-            clean_cmd = f"module load plink/{params.plink_ver} && plink --bfile {filter_file} --set-missing-var-ids @:# --make-bed --out {clean_file}"
-            subprocess.run(clean_cmd, shell=True, check=True)
+                cmd = f"module load plink/{params.plink_ver} && plink --bfile {batch_base} --set-missing-var-ids @:# --make-bed --out {clean_file}"
+            
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Error processing {row.Batch}: {result.stderr}")
+                raise RuntimeError(f"PLINK processing failed for {row.Batch}")
+            
+            # Move log file
+            if os.path.exists(f"{clean_file}.log"):
+                shutil.move(f"{clean_file}.log", f"{params.logs_dir}/{row.Batch}_clean.log")
 
 rule mergeData:
     input:
-        geno_csv="geno.csv"
+        rules.removeSamples.output
     output:
-        bed=f"{params.merge_dir}/{params.prefix}.bed",
-        bim=f"{params.merge_dir}/{params.prefix}.bim",
-        fam=f"{params.merge_dir}/{params.prefix}.fam"
+        bed=OUT("merge", mergeName + ".bed"),
+        bim=OUT("merge", mergeName + ".bim"),
+        fam=OUT("merge", mergeName + ".fam")
     params:
-        merge_dir=params.merge_dir,
-        binary_dir=params.binary_dir,
-        plink_ver=params.plink_ver,
-        prefix=params.prefix
+        file=genos.loc[0, "Batch"] + "_clean",
+        prefix=mergeName,
+        merge_dir=OUT("merge"),
+        binary_dir=OUT("binary"),
+        reports_dir=OUT("reports"),
+        plink_ver=config['plink']
+    log:
+        out=OUT("merge", "logs", mergeName + ".out")
     run:
-        import pandas as pd, os, subprocess, shutil
+        os.makedirs(f"{params.merge_dir}/logs", exist_ok=True)
+        os.makedirs(params.reports_dir, exist_ok=True)
 
-        # Load batches
-        genos = pd.read_csv(input.geno_csv)
-
-        os.makedirs(params.merge_dir, exist_ok=True)
-
-        # Only one batch → just copy
+        # If only one batch, just copy files
         if len(genos) == 1:
             batch = genos.loc[0, "Batch"]
             for ext in [".bed", ".bim", ".fam"]:
                 shutil.copy2(f"{params.binary_dir}/{batch}_clean{ext}",
-                             f"{params.merge_dir}/{params.prefix}{ext}")
-            with open("mergeList.txt", "w") as f:
-                pass
+                           f"{params.merge_dir}/{params.prefix}{ext}")
         else:
-            # Write merge list
-            with open("mergeList.txt", "w") as f:
-                for row in genos[1:].itertuples():
-                    f.write(f"{params.binary_dir}/{row.Batch}_clean\n")
+            # Multiple batches - simple merge
+            mergeList = open('mergeList.txt', 'w')
+            for row in genos[1:].itertuples():
+                mergeList.write(f"{params.binary_dir}/" + row.Batch + "_clean\n")
+            mergeList.close()
 
-            # Run PLINK merge
-            first_batch = f"{params.binary_dir}/{genos.loc[0, 'Batch']}_clean"
-            merged_out = f"{params.merge_dir}/{params.prefix}"
+            # Try merge - let PLINK handle conflicts automatically
+            cmd = f"module load plink/{params.plink_ver} && plink --bfile {params.binary_dir}/" + params.file + f" --merge-list mergeList.txt --make-bed --out {params.merge_dir}/" + params.prefix
+            p = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
-            cmd = (
-                f"module load plink/{params.plink_ver} && "
-                f"plink --bfile {first_batch} "
-                f"--merge-list mergeList.txt "
-                f"--merge-equal-pos --make-bed "
-                f"--out {merged_out}"
-            )
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-            if result.returncode != 0:
-                print(result.stderr)
+            if p.returncode != 0:
+                print("Merge failed:", p.stderr)
                 raise RuntimeError("PLINK merge failed")
+
+            os.remove("mergeList.txt")
 
 rule qc:
     input:
@@ -211,125 +221,95 @@ rule autosomePrune:
         mv {params.merge_dir}/{params.outpre}_qcautosome.log {params.logs_dir}/{params.outpre}_qcautosome.err
         """
 
-rule snpFlip:
+rule create_frequency_file:
     input:
         rules.autosomePrune.output
     output:
-        rev=temp(OUT("imputation", "snpflip.reverse")),
-        amb=temp(OUT("imputation", "snpflip.ambiguous")),
-        an_bim=temp(OUT("imputation", "snpflip.annotated_bim"))
+        freq=OUT("imputation", mergeName + "_qcautosome.frq")
     params:
         prefix=OUT("merge", mergeName + "_qcautosome"),
-        sequence=config['sequence'],
+        outpre=mergeName,
         imputation_dir=OUT("imputation"),
-        python_ver=config['python']
+        plink_ver=config['plink']
     shell:
         """
-        module load python/{params.python_ver}
         mkdir -p {params.imputation_dir}
+        module load plink/{params.plink_ver}
         
-        
-        snpflip --fasta-genome={params.sequence} --bim={params.prefix}.bim --output-prefix={params.imputation_dir}/snpflip
+        plink --bfile {params.prefix} --freq --out {params.imputation_dir}/{params.outpre}_qcautosome
         """
 
-rule flipSnps:
+rule allele_swap_check:
     input:
         bed=rules.autosomePrune.output.bed,
         bim=rules.autosomePrune.output.bim,
         fam=rules.autosomePrune.output.fam,
-        flip_file=rules.snpFlip.output.rev
+        freq=rules.create_frequency_file.output.freq
     output:
-        bed=temp(OUT("imputation", mergeName + "_qcautosome_snpflip.bed")),
-        bim=temp(OUT("imputation", mergeName + "_qcautosome_snpflip.bim")),
-        fam=temp(OUT("imputation", mergeName + "_qcautosome_snpflip.fam"))
+        bed=OUT("imputation", "allele_swap.bed"),
+        bim=OUT("imputation", "allele_swap.bim"),
+        fam=OUT("imputation", "allele_swap.fam")
     params:
-        prefix=OUT("merge", mergeName + "_qcautosome"),
-        outpre=mergeName,
-        imputation_dir=OUT("imputation"),
-        logs_dir=OUT("imputation", "logs")
-    log:
-        out=OUT("imputation", "logs", mergeName + "_qcautosome_snpflip.out")
+        input_prefix=OUT("merge", mergeName + "_qcautosome"),
+        merge_dir=OUT("merge"),
+        plink_ver=config['plink'],
+        perl_ver=config['perl'],
+        rayner_script=config['rayner_script'],
+        rayner_legend=config['rayner_legend'],
+        ref_path=config['ref']
     shell:
         """
-        mkdir -p {params.logs_dir}
-        module load plink/{config[plink]}
+        module load plink/{params.plink_ver}
+        module load perl/{params.perl_ver}
         
-        plink --bfile {params.prefix} --flip {input.flip_file} --make-bed --out {params.imputation_dir}/{params.outpre}_qcautosome_snpflip 1> {log.out}
+        # Run right  reference genome
+        if [[ "{params.ref_path}" == *"GRCh38"* ]]; then
+            echo "Detected GRCh38 - running Rayner with -h flag"
+            perl {params.rayner_script} -b {params.input_prefix}.bim -f {input.freq} -r {params.rayner_legend} -h
+        else
+            echo "Detected GRCh37/hg19 - running Rayner with -g -p ALL flags"
+            perl {params.rayner_script} -b {params.input_prefix}.bim -f {input.freq} -r {params.rayner_legend} -g -p ALL
+        fi 
+
+        # Execute fixes
+        cd {params.merge_dir} && bash Run-plink.sh && cd -
         
-        if [[ -f {params.imputation_dir}/{params.outpre}_qcautosome_snpflip.log ]]; then
-            mv {params.imputation_dir}/{params.outpre}_qcautosome_snpflip.log {params.logs_dir}/{params.outpre}_qcautosome_snpflip.err
-        fi
+        # Copy corrected PLINK files
+        cp {params.merge_dir}/CQTL_COA9_10_qcautosome-updated.bed {output.bed}
+        cp {params.merge_dir}/CQTL_COA9_10_qcautosome-updated.bim {output.bim}
+        cp {params.merge_dir}/CQTL_COA9_10_qcautosome-updated.fam {output.fam}
+       
         """
 
-rule convertVCF:
+rule vcf_zip:
     input:
-        rules.flipSnps.output
+        bed=rules.allele_swap_check.output.bed
     output:
-        temp(OUT("imputation", mergeName + ".vcf"))
+        expand(OUT("imputation", f"{mergeName}_chr{{chr}}.vcf.gz"), chr=range(1, 23)),
     params:
-        prefix=OUT("imputation", mergeName + "_qcautosome_snpflip"),
-        outpre=mergeName,
-        imputation_dir=OUT("imputation"),
-        logs_dir=OUT("imputation", "logs")
-    log:
-        out=OUT("imputation", "logs", mergeName + "_vcf.out")
-    shell:
-        """
-        mkdir -p {params.logs_dir}
-        module load plink/{config[plink]}
-        
-        plink --bfile {params.prefix} --recode vcf --out {params.imputation_dir}/{params.outpre} 1> {log.out}
-        mv {params.imputation_dir}/{params.outpre}.log {params.logs_dir}/{params.outpre}_vcf.err
-        """
-
-rule addChrPrefix:
-    input:
-        vcf=rules.convertVCF.output
-    output:
-        temp(OUT("imputation", mergeName + "_chr.vcf.gz"))
-    params:
-        temp_vcf=OUT("imputation", mergeName + "_chr.vcf"),
-        mapping_file=config['add_chr'],
-        samtools_ver=config['samtools']
-    log:
-        out=OUT("imputation", "logs", mergeName + "_addchr.out")
-    shell:
-        """
-        module load samtools/{params.samtools_ver}
-
-        # Use bcftools to rename chromosomes with your existing mapping file
-        bcftools annotate --rename-chrs {params.mapping_file} {input.vcf} -o {params.temp_vcf} 2> {log.out}
-
-        # Compress the output
-        bgzip {params.temp_vcf}
-
-        echo "Successfully added chr prefix using bcftools with addchr.txt" >> {log.out}
-        """
-
-rule splitVCF:
-    input:
-        rules.addChrPrefix.output
-    output:
-        temp(OUT("imputation", mergeName + "_chr.vcf.gz.tbi")),
-        expand(OUT("imputation", f"{mergeName}_chr{{chr}}_hg38.vcf.gz"), chr=range(1, 23))
-    params:
-        input_vcf=OUT("imputation", mergeName + "_chr.vcf.gz"),
+        merge_dir=OUT("merge"),
         output_prefix=OUT("imputation", mergeName),
-        samtools_ver=config['samtools']
+        samtools_ver=config['samtools'],
+        ref_path=config['ref'],
+        add_chr_file=config['add_chr']
     shell:
         """
         module load samtools/{params.samtools_ver}
-        module load vcftools
-
-        tabix -p vcf {params.input_vcf}
         
         for chr in {{1..22}}; do
-            vcftools --gzvcf {params.input_vcf} --chr chr${{chr}} --recode --recode-INFO-all --out {params.output_prefix}_chr${{chr}}_hg38_temp
-            mv {params.output_prefix}_chr${{chr}}_hg38_temp.recode.vcf {params.output_prefix}_chr${{chr}}_hg38.vcf
-            bgzip {params.output_prefix}_chr${{chr}}_hg38.vcf
+            source_file="{params.merge_dir}/CQTL_COA9_10_qcautosome-updated-chr${{chr}}.vcf"
+            target_file="{params.output_prefix}_chr${{chr}}.vcf"
+            
+            # Add chr prefix if hg38, otherwise use as-is
+            if [[ "{params.ref_path}" == *"GRCh38"* ]]; then
+                bcftools annotate --rename-chrs {params.add_chr_file} "$source_file" -o "$target_file"
+            else
+                mv "$source_file" "$target_file"
+            fi
+            
+            bgzip "$target_file"
         done
         """
-
 rule ldPrune:
     input:
         rules.qc.output

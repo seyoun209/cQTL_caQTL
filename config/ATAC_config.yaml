@@ -1,13 +1,27 @@
 ## Path to sample sheet
 samplesheet: 'cqtl_atac_sample.txt'
+bam_samplesheet: 'bam_atac_CQTL_all_samplesheet.txt'
 
 ## List columns to concatenate for file names 
 ## (or indicate a single Name column, i.e. fileNamesFrom: ['Name'])
 fileNamesFrom: ['Proj','Donor','Condition','Tissue','Protocol_notes']
 
+sample_logic:
+  Sample_handing: 'true'  # Set to 'false' to disable replicate/femur logic
+  # Columns for building the main sample name
+  base_name_columns: ['Proj', 'Donor', 'Condition', 'Tissue']
+  # Columns for grouping samples
+  condition_column: 'Condition'
+  control_group_value: 'CTL'
+  treatment_group_value: 'FNF'
+  # Columns for special cases (only used if Sample_handing is 'true')
+  replicate_column: 'Protocol_notes'
+  femur_column: 'Tissue'
+  femur_donor_col: 'Donor'
+
 paths:
   outdir: atac_output
-  base_dir: '/work/users/s/e/seyoun/cQTL_caQTL' # Setting up for WASP
+  base_dir: '/work/users/s/e/seyoun/cQTL_caQTL'
 
 bwa_index: '/users/s/e/seyoun/Ref/genome/bwa_idx/hg38'
 blacklist: '/work/users/s/e/seyoun/cQTL_caQTL/external/blacklist_region/ENCFF356LFX.bed.gz'
@@ -17,13 +31,8 @@ atac_qc_Rscript: '/work/users/s/e/seyoun/cQTL_caQTL/scripts/atac_workflow/atac_b
 #atacqv
 tssextension: '2000'
 
-# Processing options
-processing_options:
-  run_standard: true        # Run standard processing (no WASP)
-  run_wasp: true           # Run WASP processing
-  run_replicates: true     # Include replicate/femur samples
-  exclude_replicates: false
-  exclude_femur: false
+#verifybamid
+verifybamid: '/users/s/e/seyoun/tools/verifyBamID_1.1.3/verifyBamID/bin/verifyBamID'
 
 # Peak calling tools to use
 peak_callers: ['macs2'] # Options: ['macs2', 'macs3', 'hmmratac', 'rocco']
@@ -32,16 +41,17 @@ peak_callers: ['macs2'] # Options: ['macs2', 'macs3', 'hmmratac', 'rocco']
 ## WASP-specific paths (only needed if run_wasp: true)
 wasp_options:
   wasp_dir: '/nas/longleaf/rhel9/apps/wasp/2023-02'
-  chrom_size: '/users/s/e/seyoun/Ref/genome/chrsize_onlychr.txt'
-  # VCF paths for WASP (will be auto-generated from genotype processing)
-  vcf_copy: '/path/to/your/vcf/files'
-
+  
+# VCF paths
+vcf_options:
+  original_vcf: '/work/users/s/e/seyoun/cQTL_caQTL/geno_output/vcf/CQTL_COA9_10_ALL_qc.vcf.gz'
 
 #deeptools
 bin_size: '10'
 effective_genome_size: '2862010428'
 normalize_option: 'RPGC'
 chrsize: '/users/s/e/seyoun/Ref/genome/chrsize_onlychr.txt'
+
 
 ## Software versions
 fastqcVers: "0.12.1"
@@ -59,3 +69,4 @@ macs2: "2.2.9.1"
 bedtools: "2.31.1"
 subread: "2.1.1"
 shapeit: "5.1.1"
+bcftools: '1.22'

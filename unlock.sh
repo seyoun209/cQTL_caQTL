@@ -15,13 +15,13 @@ case $1 in
             echo -e '\e[31mSpecify which workflow to unlock (i.e. run_RNAprocessing)'
             exit 2
             ;;
-        '01_ATAC_Preprocess_Run' | '01_ATAC_Preprocess_Run.sbatch')
+        '00_ATAC_Preprocess_Run.sbatch')
             ## Unlock snakemake workflow
             snakemake -j 1 --unlock -s workflow/atac_process/00_atac_preprocess.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
-    'run_VCFpreprocessing')
+    '01_ATAC_verifybamID_Run.sbatch')
             ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/ATAC_preatac_preprocess.smk --configfile "config/ATAC_config.yaml" --profile config/profile_slurm
+            snakemake -j 1 --unlock -s workflow/atac_process/01_vcf_VerifyBamID.smk  --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
     'run_SubsetPreprocessing')
             ## Unlock snakemake workflow
@@ -43,9 +43,9 @@ case $1 in
             ## Unlock snakemake workflow
             snakemake -j 1 --unlock -s workflow/genotype_process/00_geno_filter.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno
             ;;
-    'rna_signal' | 'run_RNAsignal')
+    '02_genoPipe_postImputation_Run.sbatch' | '02_genoPipe_postImputation_Run')
             ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/RNA_signal_track.smk --configfile "config/RNAconfig.yaml" --profile config/profile_slurm
+            snakemake -j 1 --unlock -s workflow/genotype_process/01_geno_postImputation.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno
             ;;
 esac
 
