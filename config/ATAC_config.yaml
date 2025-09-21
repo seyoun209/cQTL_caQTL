@@ -40,7 +40,7 @@ peak_callers: ['macs2'] # Options: ['macs2', 'macs3', 'hmmratac', 'rocco']
 
 ## WASP-specific paths (only needed if run_wasp: true)
 wasp_options:
-  wasp_dir: '/nas/longleaf/rhel9/apps/wasp/2023-02'
+  wasp_dir: '/users/s/e/seyoun/tools/WASP'
   
 # VCF paths
 vcf_options:
@@ -48,7 +48,7 @@ vcf_options:
 
 #deeptools
 bin_size: '10'
-effective_genome_size: '2862010428'
+effective_genome_size: '2747877702' # effective_genome_size for hg38 and 75bp read s 
 normalize_option: 'RPGC'
 chrsize: '/users/s/e/seyoun/Ref/genome/chrsize_onlychr.txt'
 

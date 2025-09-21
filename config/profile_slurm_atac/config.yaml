@@ -29,6 +29,8 @@ set-resources:
     mem_mb: 6000
   bam_qc:
     mem_mb: 30000
+  bam_qc_wasp:
+    mem_mb: 30000
   verifybamid:
     mem_mb: 15000
     time: "'11-00:00:00'"

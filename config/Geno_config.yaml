@@ -34,8 +34,8 @@ pop_name: 'CQTL' # Name of data 'population' for ancestry PCA plot
 
 
 # Post-imputation processing
-post_imputation_dir: "/work/users/s/e/seyoun/cQTL_caQTL/geno_output/imputation/michigan_imputation"
-zip_password: # add the password provided from the imputationserver
+post_imputation_dir: "/work/users/s/e/seyoun/cQTL_caQTL/geno_output/imputation/topmed_imputation"
+zip_password: # add the password
 final_vcf_name: "CQTL_COA9_10"
 
 # Output directories

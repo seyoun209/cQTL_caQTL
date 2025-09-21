@@ -16,35 +16,27 @@ case $1 in
             exit 2
             ;;
         '00_ATAC_Preprocess_Run.sbatch')
-            ## Unlock snakemake workflow
             snakemake -j 1 --unlock -s workflow/atac_process/00_atac_preprocess.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
     '01_ATAC_verifybamID_Run.sbatch')
-            ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/atac_process/01_vcf_VerifyBamID.smk  --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
+            snakemake -j 1 --unlock -s workflow/atac_process/01_01_vcf_VerifyBamID.smk  --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
-    'run_SubsetPreprocessing')
-            ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/ATAC_preatac_preprocess.smk --configfile "config/ATAC_config.yaml" --profile config/profile_slurm
+    '01_02_ATAC_callingPeak.sbatch')
+            snakemake -j 1 --unlock -s workflow/atac_process/01_02_callingPeak.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
             'rna' | 'run_RNA_preprocessing')
-            ## Unlock snakemake workflow
             snakemake -j 1 --unlock -s workflow/RNA_preprocess.smk --configfile "config/RNAconfig.yaml" --profile config/profile_slurm
             ;;
-    'wasp' | 'run_WASP_ATAC')
-            ## Unlock snakemake workflow
-            snakemake -j 1 --unlock -s workflow/WASP_atac.smk --configfile "config/ATACconfig.yaml" --profile config/profile_slurm
+    '02_ATAC_wasp_Run.sbatch')
+            snakemake -j 1 --unlock -s workflow/atac_process/02_wasp.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
     'signal' | 'run_signalTrack')
-            ## Unlock snakemake workflow
             snakemake -j 1 --unlock -s workflow/signal_track.smk --configfile config/ATACconfig.yaml --profile config/profile_slurm
             ;;
     '01_genoPipe_Run.sbatch' | '01_geno')
-            ## Unlock snakemake workflow
             snakemake -j 1 --unlock -s workflow/genotype_process/00_geno_filter.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno
             ;;
     '02_genoPipe_postImputation_Run.sbatch' | '02_genoPipe_postImputation_Run')
-            ## Unlock snakemake workflow
             snakemake -j 1 --unlock -s workflow/genotype_process/01_geno_postImputation.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno
             ;;
 esac

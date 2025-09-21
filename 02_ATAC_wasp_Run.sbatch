@@ -1,5 +1,5 @@
 #! /bin/bash -login
-#SBATCH -J vcf_verifybam
+#SBATCH -J atac_wasp
 #SBATCH -t 11-00:00:00
 #SBATCH -N 1
 #SBATCH -n 1
@@ -24,10 +24,10 @@ mkdir -p atac_output/logs_slurm workflow_logs
 
 
 ## Execute common preprocess
-snakemake -s workflow/atac_process/01_01_vcf_VerifyBamID.smk \
+snakemake -s workflow/atac_process/02_wasp.smk \
   --configfile config/ATAC_config.yaml \
   --profile config/profile_slurm_atac \
-  -j 50 --max-jobs-per-second 10 --max-status-checks-per-second 1 \
+  -j 50 --max-jobs-per-second 50 --max-status-checks-per-second 1 \
   --rerun-incomplete -p --latency-wait 200
 
 echo "ATAC verifybamID done!"
