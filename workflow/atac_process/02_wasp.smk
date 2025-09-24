@@ -68,7 +68,7 @@ print(f"INFO: Using 4 VCF groups: {VCF_GROUPS}")
 
 onsuccess:
     print("WASP processing completed successfully!")
-    print("Final WASP-processed BAM files: wasp_output/blk_filter/*.sorted_final.bam")
+    print("Final WASP-processed BAM files: atac_output/wasp/06_blk_filter/*.sorted_final.bam")
 
 rule all:
     input:

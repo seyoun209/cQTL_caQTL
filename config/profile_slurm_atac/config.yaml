@@ -38,19 +38,10 @@ set-resources:
     mem_mb: 4000
   multiqc:
     mem_mb: 4000
-  rocco_peaks:
-    mem_mb: 34000
-    time: "'7-00:00:00'"
   signal:
     mem_mb: 4000
   mergeSignal:
     mem_mb: 8000
-    time: "'11-00:00:00'"
-  mergeForwardSignal:
-    mem_mb: 16000
-    time: "11-00:00:00"
-  mergeReverseSignal:
-    mem_mb: 16000
     time: "'11-00:00:00'"
   mergeAlign:
     mem_mb: 8000
@@ -62,12 +53,9 @@ set-resources:
     mem_mb: 32000
   merge:
     mem_mb: 6000
-  macs3_peaks:
-    mem_mb: 10000
-  hmmratac_peaks:
-    mem_mb: 20000
   macs2_peaks:
     mem_mb: 10000
+
 
 # How Snakemake submits each job
 cluster-generic-submit-cmd: >-

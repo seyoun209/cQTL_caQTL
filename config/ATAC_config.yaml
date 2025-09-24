@@ -34,11 +34,11 @@ tssextension: '2000'
 #verifybamid
 verifybamid: '/users/s/e/seyoun/tools/verifyBamID_1.1.3/verifyBamID/bin/verifyBamID'
 
-# Peak calling tools to use
-peak_callers: ['macs2'] # Options: ['macs2', 'macs3', 'hmmratac', 'rocco']
+# Peak calling tools
+peak_callers: ['macs2'] 
 
 
-## WASP-specific paths (only needed if run_wasp: true)
+## WASP-specific 
 wasp_options:
   wasp_dir: '/users/s/e/seyoun/tools/WASP'
   
@@ -52,6 +52,13 @@ effective_genome_size: '2747877702' # effective_genome_size for hg38 and 75bp re
 normalize_option: 'RPGC'
 chrsize: '/users/s/e/seyoun/Ref/genome/chrsize_onlychr.txt'
 
+#bedops 
+bedops_dir: "/users/s/e/seyoun/tools/bedops-2.4.41/bin"
+
+#Rasqual
+maf_threshold: 0.05
+rasqual_dir: "/users/s/e/seyoun/tools/rasqual"
+bam_dir: '/work/users/s/e/seyoun/cQTL_caQTL/atac_output/wasp/06_blk_filter'
 
 ## Software versions
 fastqcVers: "0.12.1"
@@ -70,3 +77,4 @@ bedtools: "2.31.1"
 subread: "2.1.1"
 shapeit: "5.1.1"
 bcftools: '1.22'
+plink: "1.90b6.21"

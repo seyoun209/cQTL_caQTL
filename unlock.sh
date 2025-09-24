@@ -30,8 +30,8 @@ case $1 in
     '02_ATAC_wasp_Run.sbatch')
             snakemake -j 1 --unlock -s workflow/atac_process/02_wasp.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
-    'signal' | 'run_signalTrack')
-            snakemake -j 1 --unlock -s workflow/signal_track.smk --configfile config/ATACconfig.yaml --profile config/profile_slurm
+    '02_02_ATAC_wasp_callingPeak_Run.sbatch')
+            snakemake -j 1 --unlock -s workflow/atac_process/02_02_wasp_callingPeak.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
     '01_genoPipe_Run.sbatch' | '01_geno')
             snakemake -j 1 --unlock -s workflow/genotype_process/00_geno_filter.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno
