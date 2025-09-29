@@ -64,6 +64,9 @@ rule all:
         expand(OUT("geno", "{group}", "02_pca", "cqtl.eigenvec"), group=VCF_GROUPS),
         # 03. RASQUAL AS-VCFs by chromosome
         expand(OUT("geno", "{group}", "03_asvcf", "{chr}.{group}.ASCounts.vcf.gz"), 
+               group=VCF_GROUPS, chr=CHROMOSOMES),
+        # 04. eigenMT recode012 by chromosome
+        expand(OUT("geno", "{group}", "04_recode", "{chr}.{group}.traw"),
                group=VCF_GROUPS, chr=CHROMOSOMES)
 
 rule filter_by_maf_vcf:
@@ -200,4 +203,36 @@ rule create_asvcf:
         
         # Clean up temp files
         rm -f $temp_vcf $temp_vcf.tbi
+        """
+
+rule recode_vcf_for_eigenmt:
+    input:
+        vcf=rules.create_asvcf.output.asvcf
+    output:
+        traw=OUT("geno", "{group}", "04_recode", "{chr}.{group}.traw"),
+    params:
+        plink2_ver=config['plink2'],
+        out_prefix=lambda wc: OUT("geno", wc.group, "04_recode", f"{wc.chr}.{wc.group}")
+    threads: 4
+    resources:
+        mem_mb=8000,
+        time="1:00:00"
+    log:
+        OUT("logs", "recode_{group}_{chr}.log")
+    shell:
+        """
+        module load plink/{params.plink2_ver}
+        mkdir -p $(dirname {output.traw})
+        
+        # Extract chromosome and recode to A-transpose format
+        plink2 --vcf {input.vcf} \
+               --chr {wildcards.chr} \
+               --const-fid 0 \
+               --recode A-transpose \
+               --keep-allele-order \
+               --out {params.out_prefix} 2> {log}
+        
+        # Fix header: remove "0_" prefix from sample IDs
+        # The sed command removes "0_" after tab or at start of line
+        sed -i '1s/\\(^\\|\\t\\)0_/\\1/g' {output.traw}
         """

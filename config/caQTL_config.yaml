@@ -1,0 +1,29 @@
+paths:
+  outdir: atac_output
+  base_dir: '/work/users/s/e/seyoun/cQTL_caQTL'
+
+# RASQUAL Analysis Parameters
+conditions: ['pbs', 'fnf']
+vcf_groups: ['pbs_geno', 'fnf_geno'] 
+chromosomes: ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 
+                'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 
+                'chr21', 'chr22']
+atac_pcs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+window: '25'  # Window size in kb
+rasqual_dir: '/users/s/e/seyoun/tools/rasqual/bin/rasqual'
+
+rasqual_filters:
+  rsnp_correlation: 0.8
+  imputation_quality: 0.7
+
+eigenmt_dir: "/users/s/e/seyoun/tools/eigenMT"
+eigenmt_window_snps: '200'
+eigenmt_cis_dist: '1000000'
+eigenmt_var_thresh: '0.99'
+
+
+# modules
+tabix_ver: "0.2.6"
+gsl_ver: "2.7"
+r: "4.5.0"
+python: "3.12.4"

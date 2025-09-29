@@ -8,7 +8,8 @@ make_covariates <- function(meta_final, geno_pca, pca_points,
                             output_dir = out_dir) {
   
   # Map CTL → PBS for output naming
-  condition_label <- ifelse(condition == "CTL", "PBS", condition)
+condition_label <- ifelse(condition == "CTL", "pbs",
+                           ifelse(condition == "FNF", "fnf", condition))
 
   # Subset metadata for the given condition
   cond_indices <- which(meta_final$Condition == condition)

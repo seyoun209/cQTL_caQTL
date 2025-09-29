@@ -150,8 +150,3 @@ write.table(fnf_mapping,
             row.names = FALSE, col.names = TRUE,
             quote = FALSE, sep = "\t")
 
-
-
-message("All covariates created successfully. Files saved to: ", out_dir)
-message("File naming: pbs_covariates_pc0.bin through pbs_covariates_pc10.bin")
-message("File naming: fnf_covariates_pc0.bin through fnf_covariates_pc10.bin")

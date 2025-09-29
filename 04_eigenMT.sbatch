@@ -1,5 +1,5 @@
 #! /bin/bash -login
-#SBATCH -J ASVCF_rasqaul_pre
+#SBATCH -J eigenMT
 #SBATCH -t 11-00:00:00
 #SBATCH -N 1
 #SBATCH -n 1
@@ -24,13 +24,13 @@ mkdir -p atac_output/logs_slurm workflow_logs
 
 
 ## Execute common preprocess
-snakemake -s workflow/caQTL/1a.ASVCF_for_rasqual.smk \
-  --configfile config/ATAC_config.yaml \
+snakemake -s workflow/caQTL/2.eigenMTrun.smk \
+  --configfile config/caQTL_config.yaml \
   --profile config/profile_slurm_atac \
-  -j 50 --max-jobs-per-second 50 --max-status-checks-per-second 1 \
-  --rerun-incomplete -p --latency-wait 100
+  -j 100 --max-jobs-per-second 50 --max-status-checks-per-second 1 \
+  --rerun-incomplete -p --latency-wait 50
 
-echo "ASVCF  vcf preprocess for RASQUAL!"
+echo "eigenMT run done!"
 
 
 

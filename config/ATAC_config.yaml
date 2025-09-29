@@ -78,3 +78,4 @@ subread: "2.1.1"
 shapeit: "5.1.1"
 bcftools: '1.22'
 plink: "1.90b6.21"
+plink2: "2.0.0-a.6.13"

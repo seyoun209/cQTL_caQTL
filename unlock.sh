@@ -24,15 +24,18 @@ case $1 in
     '01_02_ATAC_callingPeak.sbatch')
             snakemake -j 1 --unlock -s workflow/atac_process/01_02_callingPeak.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
-            'rna' | 'run_RNA_preprocessing')
-            snakemake -j 1 --unlock -s workflow/RNA_preprocess.smk --configfile "config/RNAconfig.yaml" --profile config/profile_slurm
-            ;;
     '02_ATAC_wasp_Run.sbatch')
             snakemake -j 1 --unlock -s workflow/atac_process/02_wasp.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
     '02_02_ATAC_wasp_callingPeak_Run.sbatch')
             snakemake -j 1 --unlock -s workflow/atac_process/02_02_wasp_callingPeak.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
+    '03_1a_asvcf_Run.sbatch')
+            snakemake -j 1 --unlock -s workflow/caQTL/1a.ASVCF_for_rasqual.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
+	    ;;
+    '03_1b_rasqaul_Run.sbatch')
+            snakemake -j 1 --unlock -s workflow/caQTL/1b.rasqaulRun.smk --configfile config/caQTL_config.yaml --profile config/profile_slurm_atac
+	    ;;
     '01_genoPipe_Run.sbatch' | '01_geno')
             snakemake -j 1 --unlock -s workflow/genotype_process/00_geno_filter.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno
             ;;
