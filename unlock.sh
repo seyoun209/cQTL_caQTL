@@ -36,6 +36,12 @@ case $1 in
     '03_1b_rasqaul_Run.sbatch')
             snakemake -j 1 --unlock -s workflow/caQTL/1b.rasqaulRun.smk --configfile config/caQTL_config.yaml --profile config/profile_slurm_atac
 	    ;;
+    '03_1c_rasqaul_permRun.sbatch')
+            snakemake -j 1 --unlock -s workflow/caQTL/1c.rasqual_perm.smk --configfile config/caQTL_config.yaml --profile config/profile_slurm_atac
+            ;;
+    '04_eigenMT.sbatch')
+            snakemake -j 1 --unlock -s workflow/caQTL/2.eigenMTrun.smk --configfile config/caQTL_config.yaml --profile config/profile_slurm_atac
+            ;;
     '01_genoPipe_Run.sbatch' | '01_geno')
             snakemake -j 1 --unlock -s workflow/genotype_process/00_geno_filter.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno
             ;;

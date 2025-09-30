@@ -23,23 +23,23 @@ rule all:
         # EigenMT inputs - 4 files per condition/PC/chromosome combination
         expand(OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "gen.positions_chr{chr}_{condition}_pc{pc}.txt"),
+                   "gen.positions_{chr}_{condition}_pc{pc}.txt"),
                condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB),
         expand(OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "genotypes_chr{chr}_{condition}_pc{pc}.txt"),
+                   "genotypes_{chr}_{condition}_pc{pc}.txt"),
                condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB),
         expand(OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "phe.positions_chr{chr}_{condition}_pc{pc}.txt"),
+                   "phe.positions_{chr}_{condition}_pc{pc}.txt"),
                condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB),
         expand(OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "qtl_chr{chr}_{condition}_pc{pc}.txt"),
+                   "qtl_{chr}_{condition}_pc{pc}.txt"),
                condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB),
         #eigenMT results
         expand(OUT("caQTL", "eigenMT", "results", "window_{window}kb","{condition}", "pc{pc}",
-                   "eigenMT_chr{chr}_{condition}_pc{pc}.txt"),condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB)
+                   "eigenMT_{chr}_{condition}_pc{pc}.txt"),condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB)
 
 rule prepare_eigenmt_inputs:
     input:
@@ -48,18 +48,18 @@ rule prepare_eigenmt_inputs:
         traw=lambda wc: OUT("geno", CONDITION_TO_GROUP[wc.condition], "04_recode",
                            "{chr}." + CONDITION_TO_GROUP[wc.condition] + ".traw")
     output:
-        gen_positions=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb", 
+        gen_positions=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
                          "{condition}", "pc{pc}",
-                         "gen.positions_chr{chr}_{condition}_pc{pc}.txt"),
+                         "gen.positions_{chr}_{condition}_pc{pc}.txt"),
         genotypes=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
                      "{condition}", "pc{pc}",
-                     "genotypes_chr{chr}_{condition}_pc{pc}.txt"),
+                     "genotypes_{chr}_{condition}_pc{pc}.txt"),
         phe_positions=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
                          "{condition}", "pc{pc}",
-                         "phe.positions_chr{chr}_{condition}_pc{pc}.txt"),
+                         "phe.positions_{chr}_{condition}_pc{pc}.txt"),
         qtl=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
                "{condition}", "pc{pc}",
-               "qtl_chr{chr}_{condition}_pc{pc}.txt")
+               "qtl_{chr}_{condition}_pc{pc}.txt")
     params:
         r_version=config['r']
     threads: 2
@@ -67,7 +67,7 @@ rule prepare_eigenmt_inputs:
         mem_mb=16000,
         time="1:00:00"
     log:
-        OUT("logs", "eigenmt_prep_{condition}_chr{chr}_pc{pc}_{window}kb.log")
+        OUT("logs", "eigenmt_prep_{condition}_{chr}_pc{pc}_{window}kb.log")
     shell:
         """
         module load r/{params.r_version}
@@ -84,43 +84,37 @@ rule prepare_eigenmt_inputs:
         cat("PC: {wildcards.pc}\\n")
         cat("Window: {wildcards.window}kb\\n")
         
-        # Read adjusted RASQUAL results
+        #############################
+        # Load RASQUAL results
+        #############################
         cat("Reading RASQUAL results from: {input.adjusted_results}\\n")
-        rasqual <- fread("{input.adjusted_results}")
-        
-        cat("Total variants in adjusted results:", nrow(rasqual), "\\n")
+        RASQUAL <- fread("{input.adjusted_results}")
         
         # Filter for current chromosome
         chrom_num <- gsub("chr", "", "{wildcards.chr}")
-        rasqual_chr <- rasqual[Chromosome == "{wildcards.chr}" | Chromosome == chrom_num]
+        RASQUAL_chr <- RASQUAL[Chromosome == "{wildcards.chr}" | Chromosome == chrom_num]
         
-        cat("Variants for {wildcards.chr}:", nrow(rasqual_chr), "\\n")
+        cat("Total variants for {wildcards.chr}:", nrow(RASQUAL_chr), "\\n")
         
-        if (nrow(rasqual_chr) == 0) {{
+        if (nrow(RASQUAL_chr) == 0) {{
             cat("WARNING: No variants found for chromosome {wildcards.chr}\\n")
-            # Create empty output files
-            empty_dt <- data.table()
-            fwrite(empty_dt, "{output.gen_positions}", sep = "\\t")
-            fwrite(empty_dt, "{output.genotypes}", sep = "\\t")
-            fwrite(empty_dt, "{output.phe_positions}", sep = "\\t")
-            fwrite(empty_dt, "{output.qtl}", sep = "\\t")
-            quit(save = "no", status = 0)
+            stop("No data for this chromosome")
         }}
         
         #############################
         # 1. gen.positions
         #############################
         cat("Creating gen.positions...\\n")
-        gen_pos <- rasqual_chr %>%
+        Gen.pos <- RASQUAL_chr %>%
             select(snp = rs_ID, chr_snp = Chromosome, pos = SNP_Position) %>%
-            filter(snp != "SKIPPED", !is.na(snp), snp != "") %>%
+            filter(snp != "SKIPPED") %>%
             distinct(snp, .keep_all = TRUE)
         
-        gen_pos$chr_snp <- str_remove(gen_pos$chr_snp, "^chr")
+        Gen.pos$chr_snp <- str_remove(Gen.pos$chr_snp, "^chr")
         
-        fwrite(gen_pos, "{output.gen_positions}", sep = "\\t", 
+        fwrite(Gen.pos, "{output.gen_positions}", sep = "\\t", 
                quote = FALSE, row.names = FALSE, col.names = TRUE)
-        cat("Wrote gen.positions:", nrow(gen_pos), "variants\\n")
+        cat("Wrote gen.positions:", nrow(Gen.pos), "variants\\n")
         
         #############################
         # 2. genotypes
@@ -128,12 +122,10 @@ rule prepare_eigenmt_inputs:
         cat("Reading genotype file: {input.traw}\\n")
         geno_dt <- fread("{input.traw}")
         
-        cat("Genotype file dimensions:", nrow(geno_dt), "x", ncol(geno_dt), "\\n")
-        
-        # Extract SNP column and sample columns (columns 7 onward)
-        genotypes <- geno_dt %>%
-            select(SNP, 7:ncol(geno_dt)) %>%
-            filter(SNP %in% gen_pos$snp)
+        num <- ncol(geno_dt)
+        genotypes <- geno_dt[, c(2, 7:num), with = FALSE]
+        setnames(genotypes, old = colnames(genotypes)[1], new = "SNP")
+        genotypes <- genotypes[SNP %in% Gen.pos$snp]
         
         fwrite(genotypes, "{output.genotypes}", sep = "\\t",
                quote = FALSE, row.names = FALSE, col.names = TRUE)
@@ -143,28 +135,30 @@ rule prepare_eigenmt_inputs:
         # 3. phe.positions
         #############################
         cat("Creating phe.positions...\\n")
-        phe_pos <- rasqual_chr %>%
+        Phe.pos <- RASQUAL_chr %>%
             select(peak_id = Feature, chrom_probe = Chromosome) %>%
-            distinct() %>%
-            mutate(
-                chrom_probe = str_remove(chrom_probe, "^chr"),
-                tmp = str_remove(peak_id, paste0("^", "{wildcards.chr}", "_")),
-                s1 = str_split_fixed(tmp, "_", 2)[, 1],
-                s2 = str_split_fixed(tmp, "_", 2)[, 2]
-            ) %>%
-            select(peak_id, chrom_probe, s1, s2)
+            distinct()
         
-        fwrite(phe_pos, "{output.phe_positions}", sep = "\\t",
+        # Remove chromosome prefix from peak names
+        chrop <- paste0("{wildcards.chr}", "_")
+        A <- gsub(chrop, "", Phe.pos$peak_id)
+        A <- str_split_fixed(A, "_", 2)
+        
+        Phe.pos <- cbind(Phe.pos, A)
+        colnames(Phe.pos) <- c("peak_id", "chrom_probe", "s1", "s2")
+        Phe.pos$chrom_probe <- str_remove(Phe.pos$chrom_probe, "^chr")
+        
+        fwrite(Phe.pos, "{output.phe_positions}", sep = "\\t",
                quote = FALSE, row.names = FALSE, col.names = TRUE)
-        cat("Wrote phe.positions:", nrow(phe_pos), "peaks\\n")
+        cat("Wrote phe.positions:", nrow(Phe.pos), "peaks\\n")
         
         #############################
         # 4. qtl
         #############################
         cat("Creating qtl file...\\n")
-        qtl <- rasqual_chr %>%
+        qtl <- RASQUAL_chr %>%
             select(snp = rs_ID, peak = Feature, "p-value" = PValue) %>%
-            filter(snp != "SKIPPED", !is.na(snp), snp != "", snp %in% gen_pos$snp)
+            filter(snp != "SKIPPED")
         
         fwrite(qtl, "{output.qtl}", sep = "\\t",
                quote = FALSE, row.names = FALSE, col.names = TRUE)
@@ -172,8 +166,8 @@ rule prepare_eigenmt_inputs:
         
         cat("\\nEigenMT input preparation complete for {wildcards.chr}\\n")
         cat("Summary:\\n")
-        cat("  - Variants:", nrow(gen_pos), "\\n")
-        cat("  - Peaks:", nrow(phe_pos), "\\n")
+        cat("  - Variants:", nrow(Gen.pos), "\\n")
+        cat("  - Peaks:", nrow(Phe.pos), "\\n")
         cat("  - Associations:", nrow(qtl), "\\n")
         
 RSCRIPT
@@ -188,7 +182,7 @@ rule run_eigenMT:
     output:
         results=OUT("caQTL", "eigenMT", "results", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "eigenMT_chr{chr}_{condition}_pc{pc}.txt")
+                   "eigenMT_{chr}_{condition}_pc{pc}.txt")
     params:
         eigenmt_dir=config['eigenmt_dir'],
         python_version=config['python'],
@@ -200,11 +194,14 @@ rule run_eigenMT:
         mem_mb=10000,
         time="1-00:00:00"
     log:
-        OUT("logs", "eigenmt_run_{condition}_chr{chr}_pc{pc}_{window}kb.log")
+        OUT("logs", "eigenmt_run_{condition}_{chr}_pc{pc}_{window}kb.log")
     shell:
         """
         module load python/{params.python_version}
         mkdir -p $(dirname {output.results})
+
+        # Remove 'chr' prefix from chromosome for eigenMT
+        CHROM=$(echo {wildcards.chr} | sed 's/chr//')
 
         # Check if input files have data
         qtl_lines=$(wc -l < {input.qtl})
@@ -215,7 +212,7 @@ rule run_eigenMT:
             echo -e "GENE\\tSNP\\tSTATISTIC\\tBETA\\tP_value" > {output.results}
         else
             python {params.eigenmt_dir}/eigenMT.py \
-                --CHROM {wildcards.chr} \
+                --CHROM "$CHROM" \
                 --QTL {input.qtl} \
                 --GEN {input.genotypes} \
                 --GENPOS {input.gen_positions} \
