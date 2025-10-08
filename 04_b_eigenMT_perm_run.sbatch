@@ -1,5 +1,5 @@
 #! /bin/bash -login
-#SBATCH -J atac_wasp
+#SBATCH -J eigenMT_perm
 #SBATCH -t 11-00:00:00
 #SBATCH -N 1
 #SBATCH -n 1
@@ -24,13 +24,13 @@ mkdir -p atac_output/logs_slurm workflow_logs
 
 
 ## Execute common preprocess
-snakemake -s workflow/atac_process/02_01_wask.smk \
-  --configfile config/ATAC_config.yaml \
+snakemake -s workflow/caQTL/2b.eigenMTrun_perm.smk \
+  --configfile config/caQTL_config.yaml \
   --profile config/profile_slurm_atac \
-  -j 50 --max-jobs-per-second 50 --max-status-checks-per-second 1 \
-  --rerun-incomplete -p --latency-wait 200
+  -j 100 --max-jobs-per-second 50 --max-status-checks-per-second 1 \
+  --rerun-incomplete -p --latency-wait 50
 
-echo "ATAC verifybamID done!"
-echo "Output files are in: atac_output/"
+echo "eigenMT permutation batch  run done!"
+
 
 

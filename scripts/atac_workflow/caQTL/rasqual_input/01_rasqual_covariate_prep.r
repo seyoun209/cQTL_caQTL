@@ -17,12 +17,17 @@ source("/work/users/s/e/seyoun/cQTL_caQTL/scripts/atac_workflow/utils/utils_rasq
 base_dir <- "/work/users/s/e/seyoun/cQTL_caQTL/atac_output"
 geno_dir <- file.path(base_dir,"geno")
 out_dir <-file.path(base_dir, "caQTL","rasqual_input","covar")
+response_dir <- file.path(base_dir,"caQTL" ,"data","response_qtl")
 n_pcs_max <- 10
 
 if (!dir.exists(out_dir)) {
   dir.create(out_dir, recursive = TRUE)
 }
 
+
+if (!dir.exists(response_dir)) {
+  dir.create(response_dir, recursive = TRUE)
+}
 
 #----------------------------------------------------------------
 # 1. atac-seq PC calculation
@@ -42,6 +47,21 @@ atac_dds_rasqual <- atac_dds_rasqual[keep,]
 vsd_donor <- vst(atac_dds_rasqual, blind=TRUE)
 vst_counts = assay(vsd_donor)
 
+save(vst_counts, file=file.path(response_dir, "vst_counts.RData"))
+
+gr <- rowRanges(atac_dds_rasqual)
+peak_info <- data.frame(
+  PeakID = if (!is.null(mcols(gr)$peakID)) mcols(gr)$peakID else rownames(atac_dds_rasqual),
+  Chr    = as.character(seqnames(gr)),
+  Start  = start(gr),
+  End    = end(gr),
+  stringsAsFactors = FALSE
+)
+peak_info$Feature <- paste(peak_info$Chr, peak_info$Start, peak_info$End, sep = "_")
+rownames(vst_counts) <- peak_info$Feature
+
+save(vst_counts,peak_info, file=file.path(response_dir, "vst_counts.RData"))
+  
 # Calculate PCA - this step was missing!
 pca_rasqual <- prcomp(t(vst_counts))
 

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
+import pandas as pd
 
 def OUT(*parts):
     return os.path.join(config["paths"]["outdir"], *[p for p in parts if p])
@@ -8,66 +11,71 @@ def OUT(*parts):
 CONDITIONS = config['conditions']
 VCF_GROUPS = config['vcf_groups']
 CHROMOSOMES = config['chromosomes']
-PC_VALUES = config['atac_pcs']
 WINDOW_KB = config['window']
+N_PERMUTATIONS = config['n_perm']
 
-# Create condition to VCF group mapping
+# Best PC for each condition
+BEST_PC = config['best_pc']
+
+# Create mappings from config
 CONDITION_TO_GROUP = dict(zip(CONDITIONS, VCF_GROUPS))
-
-onsuccess:
-    print("EigenMT input preparation completed successfully!")
-    print(f"Inputs available in: {OUT('caQTL', 'eigenMT', 'inputs')}")
 
 rule all:
     input:
-        # EigenMT inputs - 4 files per condition/PC/chromosome combination
-        expand(OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
+        # EigenMT inputs - 4 files per condition/PC/chromosome/permutation combination
+        expand(OUT("caQTL", "eigenMT_perm", "inputs", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "gen.positions_{chr}_{condition}_pc{pc}.txt"),
-               condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB),
-        expand(OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
+                   "gen.positions_{chr}_{condition}_pc{pc}_perm{perm}.txt"),
+               condition=CONDITIONS, pc=[BEST_PC[cond] for cond in CONDITIONS],
+               chr=CHROMOSOMES, window=WINDOW_KB, perm=range(1, N_PERMUTATIONS + 1)),
+        expand(OUT("caQTL", "eigenMT_perm", "inputs", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "genotypes_{chr}_{condition}_pc{pc}.txt"),
-               condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB),
-        expand(OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
+                   "genotypes_{chr}_{condition}_pc{pc}_perm{perm}.txt"),
+               condition=CONDITIONS, pc=[BEST_PC[cond] for cond in CONDITIONS],
+               chr=CHROMOSOMES, window=WINDOW_KB, perm=range(1, N_PERMUTATIONS + 1)),
+        expand(OUT("caQTL", "eigenMT_perm", "inputs", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "phe.positions_{chr}_{condition}_pc{pc}.txt"),
-               condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB),
-        expand(OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
+                   "phe.positions_{chr}_{condition}_pc{pc}_perm{perm}.txt"),
+               condition=CONDITIONS, pc=[BEST_PC[cond] for cond in CONDITIONS],
+               chr=CHROMOSOMES, window=WINDOW_KB, perm=range(1, N_PERMUTATIONS + 1)),
+        expand(OUT("caQTL", "eigenMT_perm", "inputs", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "qtl_{chr}_{condition}_pc{pc}.txt"),
-               condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB),
-        #eigenMT results
-        expand(OUT("caQTL", "eigenMT", "results", "window_{window}kb","{condition}", "pc{pc}",
-                   "eigenMT_{chr}_{condition}_pc{pc}.txt"),condition=CONDITIONS, pc=PC_VALUES, chr=CHROMOSOMES, window=WINDOW_KB)
+                   "qtl_{chr}_{condition}_pc{pc}_perm{perm}.txt"),
+               condition=CONDITIONS, pc=[BEST_PC[cond] for cond in CONDITIONS],
+               chr=CHROMOSOMES, window=WINDOW_KB, perm=range(1, N_PERMUTATIONS + 1)),
+        # EigenMT results
+        expand(OUT("caQTL", "eigenMT_perm", "results", "window_{window}kb", "{condition}", "pc{pc}",
+                   "eigenMT_{chr}_{condition}_pc{pc}_perm{perm}.txt"),
+               condition=CONDITIONS, pc=[BEST_PC[cond] for cond in CONDITIONS],
+               chr=CHROMOSOMES, window=WINDOW_KB, perm=range(1, N_PERMUTATIONS + 1))
 
-rule prepare_eigenmt_inputs:
+rule prepare_eigenmt_perm_inputs:
     input:
-        adjusted_results=OUT("caQTL", "rasqual_output", "combined_window_{window}kb",
-                           "{condition}_pc{pc}_{window}kb_adjusted.txt"),
+        adjusted_results=OUT("caQTL", "rasqual_permutation", "combined_window_{window}kb",
+                           "{condition}_pc{pc}_{window}kb_perm{perm}_adjusted.txt"),
         traw=lambda wc: OUT("geno", CONDITION_TO_GROUP[wc.condition], "04_recode",
                            "{chr}." + CONDITION_TO_GROUP[wc.condition] + ".traw")
     output:
-        gen_positions=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
+        gen_positions=OUT("caQTL", "eigenMT_perm", "inputs", "window_{window}kb",
                          "{condition}", "pc{pc}",
-                         "gen.positions_{chr}_{condition}_pc{pc}.txt"),
-        genotypes=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
+                         "gen.positions_{chr}_{condition}_pc{pc}_perm{perm}.txt"),
+        genotypes=OUT("caQTL", "eigenMT_perm", "inputs", "window_{window}kb",
                      "{condition}", "pc{pc}",
-                     "genotypes_{chr}_{condition}_pc{pc}.txt"),
-        phe_positions=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
+                     "genotypes_{chr}_{condition}_pc{pc}_perm{perm}.txt"),
+        phe_positions=OUT("caQTL", "eigenMT_perm", "inputs", "window_{window}kb",
                          "{condition}", "pc{pc}",
-                         "phe.positions_{chr}_{condition}_pc{pc}.txt"),
-        qtl=OUT("caQTL", "eigenMT", "inputs", "window_{window}kb",
+                         "phe.positions_{chr}_{condition}_pc{pc}_perm{perm}.txt"),
+        qtl=OUT("caQTL", "eigenMT_perm", "inputs", "window_{window}kb",
                "{condition}", "pc{pc}",
-               "qtl_{chr}_{condition}_pc{pc}.txt")
+               "qtl_{chr}_{condition}_pc{pc}_perm{perm}.txt")
     params:
         r_version=config['r']
     threads: 2
     resources:
-        mem_mb=16000,
+        mem_mb=55000,
         time="1:00:00"
     log:
-        OUT("logs", "eigenmt_prep_{condition}_{chr}_pc{pc}_{window}kb.log")
+        OUT("logs", "eigenmt_perm_prep_{condition}_{chr}_pc{pc}_{window}kb_perm{perm}.log")
     shell:
         """
         module load r/{params.r_version}
@@ -100,8 +108,7 @@ rule prepare_eigenmt_inputs:
             cat("WARNING: No variants found for chromosome {wildcards.chr}\\n")
             stop("No data for this chromosome")
         }}
-        
-        #############################
+         #############################
         # 1. gen.positions
         #############################
         cat("Creating gen.positions...\\n")
@@ -151,7 +158,6 @@ rule prepare_eigenmt_inputs:
         fwrite(Phe.pos, "{output.phe_positions}", sep = "\\t",
                quote = FALSE, row.names = FALSE, col.names = TRUE)
         cat("Wrote phe.positions:", nrow(Phe.pos), "peaks\\n")
-        
         #############################
         # 4. qtl
         #############################
@@ -169,20 +175,19 @@ rule prepare_eigenmt_inputs:
         cat("  - Variants:", nrow(Gen.pos), "\\n")
         cat("  - Peaks:", nrow(Phe.pos), "\\n")
         cat("  - Associations:", nrow(qtl), "\\n")
-        
 RSCRIPT
         """
 
-rule run_eigenMT:
+rule run_eigenMT_perm:
     input:
-        qtl=rules.prepare_eigenmt_inputs.output.qtl,
-        genotypes=rules.prepare_eigenmt_inputs.output.genotypes,
-        gen_positions=rules.prepare_eigenmt_inputs.output.gen_positions,
-        phe_positions=rules.prepare_eigenmt_inputs.output.phe_positions
+        qtl=rules.prepare_eigenmt_perm_inputs.output.qtl,
+        genotypes=rules.prepare_eigenmt_perm_inputs.output.genotypes,
+        gen_positions=rules.prepare_eigenmt_perm_inputs.output.gen_positions,
+        phe_positions=rules.prepare_eigenmt_perm_inputs.output.phe_positions
     output:
-        results=OUT("caQTL", "eigenMT", "results", "window_{window}kb",
+        results=OUT("caQTL", "eigenMT_perm", "results", "window_{window}kb",
                    "{condition}", "pc{pc}",
-                   "eigenMT_{chr}_{condition}_pc{pc}.txt")
+                   "eigenMT_{chr}_{condition}_pc{pc}_perm{perm}.txt")
     params:
         eigenmt_dir=config['eigenmt_dir'],
         python_version=config['python'],
@@ -191,10 +196,10 @@ rule run_eigenMT:
         var_thresh=config['eigenmt_var_thresh']
     threads: 1
     resources:
-        mem_mb=10000,
-        time="1-00:00:00"
+        mem_mb=50000,
+        time="2-00:00:00"
     log:
-        OUT("logs", "eigenmt_run_{condition}_{chr}_pc{pc}_{window}kb.log")
+        OUT("logs", "eigenmt_perm_run_{condition}_{chr}_pc{pc}_{window}kb_perm{perm}.log")
     shell:
         """
         module load python/{params.python_version}

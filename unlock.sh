@@ -25,7 +25,7 @@ case $1 in
             snakemake -j 1 --unlock -s workflow/atac_process/01_02_callingPeak.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
     '02_ATAC_wasp_Run.sbatch')
-            snakemake -j 1 --unlock -s workflow/atac_process/02_wasp.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
+            snakemake -j 1 --unlock -s workflow/atac_process/02_01_wask.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
             ;;
     '02_02_ATAC_wasp_callingPeak_Run.sbatch')
             snakemake -j 1 --unlock -s workflow/atac_process/02_02_wasp_callingPeak.smk --configfile config/ATAC_config.yaml --profile config/profile_slurm_atac
@@ -39,8 +39,11 @@ case $1 in
     '03_1c_rasqaul_permRun.sbatch')
             snakemake -j 1 --unlock -s workflow/caQTL/1c.rasqual_perm.smk --configfile config/caQTL_config.yaml --profile config/profile_slurm_atac
             ;;
-    '04_eigenMT.sbatch')
-            snakemake -j 1 --unlock -s workflow/caQTL/2.eigenMTrun.smk --configfile config/caQTL_config.yaml --profile config/profile_slurm_atac
+    '04_a_eigenMT.sbatch')
+            snakemake -j 1 --unlock -s workflow/caQTL/2a.eigenMTrun.smk --configfile config/caQTL_config.yaml --profile config/profile_slurm_atac
+            ;;
+    '04_b_eigenMT_perm_run.sbatch')
+            snakemake -j 1 --unlock -s workflow/caQTL/2b.eigenMTrun_perm.smk --configfile config/caQTL_config.yaml --profile config/profile_slurm_atac
             ;;
     '01_genoPipe_Run.sbatch' | '01_geno')
             snakemake -j 1 --unlock -s workflow/genotype_process/00_geno_filter.smk --configfile config/Geno_config.yaml --profile config/profile_slurm_geno

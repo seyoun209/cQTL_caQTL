@@ -20,74 +20,135 @@ conditions <- c("pbs", "fnf")
 pcs <- paste0("pc", 0:10)
 chromosomes <- 1:22
 fdr_threshold <- 0.05
-
-# Main processing loop
+bonf_threshold <- 0.05
+#-------------------------------------------------
 for (cond in conditions) {
-  for (pc in pcs) {
-    
-    cat("Processing:", cond, pc, "\n")
-    
-    # Collect results from all chromosomes
-    chr_results <- lapply(chromosomes, function(chr) {
+  for (pc_cov in pcs) {
+    cat("Processing:", cond, pc_cov, "\n")
+
+    allchr_results <- NULL
+
+    # Process each chromosome
+    for (chr in chromosomes) {
       file_path <- file.path(
         base_dir, "caQTL/eigenMT/results",
-        paste0("window_", window_type), cond, pc,
-        sprintf("eigenMT_chr%s_%s_%s.txt", chr, cond, pc)
+        paste0("window_", window_type), cond, pc_cov,
+        sprintf("eigenMT_chr%d_%s_%s.txt", chr, cond, pc_cov)
       )
-      
+
       if (!file.exists(file_path)) {
-        cat("  Warning: Missing", basename(file_path), "\n")
-        return(NULL)
+        cat("  Warning: File not found -", file_path, "\n")
+        next
       }
-      
-      fread(file_path)
-    })
-    
-    # Combine and filter out NULL results
-    all_results <- rbindlist(chr_results[!sapply(chr_results, is.null)])
-    
-    if (nrow(all_results) == 0) {
-      cat("  No results found, skipping\n\n")
+
+      eigen_results <- fread(file_path)
+      allchr_results <- rbind(allchr_results, eigen_results)
+    }
+
+    # Skip if no data
+    if (is.null(allchr_results) || nrow(allchr_results) == 0) {
+      cat("  No results found for condition:", cond, "and PC:", pc_cov, "\n")
       next
     }
-    
-    # Calculate FDR from Bonferroni-corrected p-values
-    all_results <- all_results %>%
-      arrange("p-value") %>%
-      mutate(fdr = p.adjust(BF, method = "fdr"))
-    
-    # Identify significant associations
-    sig_results <- all_results %>% filter(fdr < fdr_threshold)
-    n_sig <- nrow(sig_results)
-    
-    # Get maximum nominal p-value among significant hits
-    pval_cutoff <- if (n_sig > 0) max(sig_results$"p-value") else NA_real_
-    
-    # Create output directory
+
+    # Ensure numeric columns
+    allchr_results$`p-value` <- as.numeric(allchr_results$`p-value`)
+    allchr_results$BF <- as.numeric(allchr_results$BF)
+
+    # Sort by nominal p-value
+    allchr_results <- allchr_results %>% arrange(`p-value`)
+
+    # Compute global FDR using BF column
+    allchr_results$fdr <- p.adjust(allchr_results$BF, method = "fdr", n = nrow(allchr_results))
+
+    # Significant SNPs (FDR < 0.05)
+    sig_snps <- allchr_results %>% filter(fdr < 0.05)
+    pval_max <- if (nrow(sig_snps) > 0) max(sig_snps$`p-value`) else NA
+
+    # Output directory
     output_dir <- file.path(
       base_dir, "caQTL/eigenMT/combined_results",
-      paste0("window_", window_type), cond, pc
+      paste0("window_", window_type), cond, pc_cov
     )
     dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-    
-    # Write combined results
-    combined_file <- file.path(output_dir, sprintf("eigenMT_combined_%s_%s.txt", cond, pc))
-    fwrite(all_results, combined_file, sep = "\t", quote = FALSE)
-    
-    # Write p-value cutoff
-    cutoff_file <- file.path(output_dir, sprintf("%s_%s_MaxPvalueCutoff_%02d.txt", 
-                                                  cond, pc, fdr_threshold * 100))
-    fwrite(data.table(max_pvalue = pval_cutoff), cutoff_file, sep = "\t")
-    
-    cat(sprintf("  Total: %d | Significant (FDR < %.2f): %d\n\n", 
-                nrow(all_results), fdr_threshold, n_sig))
+
+    # Write outputs
+    fwrite(allchr_results, file.path(output_dir,
+           sprintf("eigenMT_combined_%s_%s.txt", cond, pc_cov)),
+           sep = "\t", quote = FALSE)
+
+    fwrite(sig_snps, file.path(output_dir,
+           sprintf("eigenMT_sigFDR_%s_%s.txt", cond, pc_cov)),
+           sep = "\t", quote = FALSE)
+
+    write.table(pval_max, file.path(output_dir,
+                sprintf("%s_%s_MaxPvalueCutoff_05.txt", cond, pc_cov)),
+                col.names = TRUE, row.names = FALSE, quote = FALSE)
+
+    # Log
+    cat(sprintf("  Total results: %d | FDR < 0.05: %d | Max P = %s\n\n",
+                nrow(allchr_results), nrow(sig_snps),
+                ifelse(is.na(pval_max), "NA", format(pval_max, digits = 3))))
   }
 }
 
-cat("All eigenMT results processed successfully.\n")
+
+
+# # Main processing loop
+# for (cond in conditions) {
+#   for (pc in pcs) {
+#     cat("Processing:", cond, pc, "\n")
+    
+#     chr_results <- lapply(chromosomes, function(chr) {
+#       file_path <- file.path(
+#         base_dir, "caQTL/eigenMT/results",
+#         paste0("window_", window_type), cond, pc,
+#         sprintf("eigenMT_chr%s_%s_%s.txt", chr, cond, pc)
+#       )
+#       if (file.exists(file_path)) fread(file_path) else NULL
+#     })
+    
+#     all_results <- rbindlist(chr_results[!sapply(chr_results, is.null)])
+#     if (nrow(all_results) == 0) {
+#       cat("  No results found, skipping\n\n")
+#       next
+#     }
+    
+#     # Bonferroni
+#     n_tests <- nrow(all_results)
+#     genome_bonf_threshold <- bonf_threshold / n_tests
+#     sig_bonf <- all_results %>% filter(BF < genome_bonf_threshold)
+#     n_sig_bonf <- nrow(sig_bonf)
+    
+#     # FDR
+#     all_results <- all_results %>% mutate(fdr = p.adjust(BF, method = "fdr"))
+#     sig_fdr <- all_results %>% filter(fdr < fdr_threshold)
+#     n_sig_fdr <- nrow(sig_fdr)
+    
+#     # Log results
+#     cat(sprintf("  Bonferroni-significant: %d (%.2f%%)\n", n_sig_bonf, 100*n_sig_bonf/n_tests))
+#     cat(sprintf("  FDR-significant: %d (%.2f%%)\n", n_sig_fdr, 100*n_sig_fdr/n_tests))
+    
+#     # Write outputs
+#     output_dir <- file.path(base_dir, "caQTL/eigenMT/combined_results", paste0("window_", window_type), cond, pc)
+#     dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    
+#     fwrite(all_results, file.path(output_dir, sprintf("eigenMT_combined_%s_%s.txt", cond, pc)), sep="\t", quote=FALSE)
+#     fwrite(sig_bonf, file.path(output_dir, sprintf("eigenMT_sigBonf_%s_%s.txt", cond, pc)), sep="\t", quote=FALSE)
+#     fwrite(sig_fdr, file.path(output_dir, sprintf("eigenMT_sigFDR_%s_%s.txt", cond, pc)), sep="\t", quote=FALSE)
+    
+#     summary_table <- data.table(
+#       total_tests = n_tests,
+#       bonf_cutoff = genome_bonf_threshold,
+#       n_sig_bonf = n_sig_bonf,
+#       n_sig_fdr = n_sig_fdr
+#     )
+#     fwrite(summary_table, file.path(output_dir, sprintf("summary_%s_%s.txt", cond, pc)), sep="\t")
+#   }
+# }
+
 #----------------------------------------------------------------
 # Visualization of significant SNP counts across PCs
-# Count significant associations for each condition/PC combination
 summary_df <- expand.grid(
   condition = conditions,
   pc = pcs,
@@ -100,17 +161,27 @@ summary_df <- expand.grid(
       paste0("window_", window_type), condition, pc,
       sprintf("eigenMT_combined_%s_%s.txt", condition, pc)
     ),
-    n_significant = {
+    n_bonferroni = {
+      if (file.exists(combined_file)) {
+        results <- fread(combined_file)
+        n_tests <- nrow(results)
+        genome_bonf <- 0.05 / n_tests
+        sum(results$BF < genome_bonf, na.rm = TRUE)
+      } else {
+        NA_integer_
+      }
+    },
+    n_fdr = {
       if (file.exists(combined_file)) {
         results <- fread(combined_file, select = "fdr")
-        sum(results$fdr < fdr_threshold, na.rm = TRUE)
+        sum(results$fdr < 0.05, na.rm = TRUE)
       } else {
         NA_integer_
       }
     }
   ) %>%
   ungroup() %>%
-  select(condition, pc, n_significant)
+  select(condition, pc, n_bonferroni, n_fdr)
 
 # Format for plotting
 summary_df <- summary_df %>%
@@ -123,10 +194,22 @@ summary_df <- summary_df %>%
     type = factor(type, levels = c("PBS", "FN-f"))
   )
 
+# Save summary
+summary_output <- file.path(
+  base_dir, "caQTL/eigenMT/combined_results",
+  paste0("window_", window_type),
+  "summary_both_Bonferroni_FDR.txt"
+)
+fwrite(summary_df, summary_output, sep = "\t")
+
+
+#-----------------------------------------------------------------
+summary_df  <- fread(summary_output)
+
 # Find maximum counts per condition for annotation
 max_summary <- summary_df %>%
   group_by(type) %>%
-  slice_max(n_significant, n = 1, with_ties = TRUE) %>%
+  slice_max(n_fdr, n = 1, with_ties = TRUE) %>%
   mutate(
     color = case_when(
       type == "PBS" ~ "#2057A7",
@@ -136,21 +219,13 @@ max_summary <- summary_df %>%
   ) %>%
   ungroup()
 
-# Save summary
-summary_output <- file.path(
-  base_dir, "caQTL/eigenMT/combined_results",
-  paste0("window_", window_type),
-  sprintf("summary_significant_caQTLs_FDR%02d.txt", fdr_threshold * 100)
-)
-fwrite(summary_df, summary_output, sep = "\t")
 
-
-counts_dotPlot <- ggplot(summary_df, aes(x = pc, y = n_significant, color = type)) +
+counts_dotPlot <- ggplot(summary_df, aes(x = pc, y = n_fdr, color = type)) +
   geom_point(size = 2) +
   labs(x = "PC", y = "Number of significant caQTLs", color = "Type") +
   scale_color_manual(values = c("PBS" = "#2057A7", "FN-f" = "#F2BC40")) +
-  geom_text(data = max_summary, aes(x = pc, y = n_significant + 100,
-                                   label = paste0(pc, ": ", n_significant)),
+  geom_text(data = max_summary, aes(x = pc, y = n_fdr + 100,
+                                   label = paste0(pc, ": ", n_fdr)),
             color = max_summary$color, vjust = 0, size = 3.5) +
   theme(text = element_text(family = "Helvetica"),
         panel.background = element_rect(fill = 'transparent', color = "transparent"),

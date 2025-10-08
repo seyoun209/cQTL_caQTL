@@ -132,6 +132,8 @@ QC_GC_histPlot <- ggplot(gc_df, aes(x = GCcontent)) +
 
 save(QC_GC_histPlot, file = file.path(out_plot_dir, "QC_GC_histPlot.rda"))
 
+ggsave(QC_GC_histPlot, filename = file.path(out_plot_dir, "QC_GC_histPlot.pdf"),
+       width = 7, height = 5, units = "in", bg = "transparent")
 # Get mapped reads for samples
 
 ataqv_files <- list.files(
@@ -257,17 +259,20 @@ atac_mdsPlot <- ggplot(atac_res_df, aes(x = log10(baseMean), y = log2FoldChange,
 
 ggsave(atac_mdsPlot, filename = file.path(out_plot_dir, "atac_mdsPlot.pdf"),
        width = 7, height = 10, units = "in", bg = "transparent")
+
+# Save qc related plots (pca, corr, ma)
+save(PCA_vsd_scattPlot, file = file.path(out_plot_dir, "PCA_vsd_scattPlot.rda"))
+save(atac_mdsPlot, file = file.path(out_plot_dir, "atac_mdsPlot.rda"))
+save(pbs_corr_plot, file = file.path(out_plot_dir, "pbs_corr_plot.rda"))
+save(fnf_corr_plot, file = file.path(out_plot_dir, "fnf_corr_plot.rda"))
 #----------------------------------------------------------------
 
 #----- Differential ATAC Gained, Lost, static Chondrocyte -------
 ## ---------- 0) Params (easy to tweak) ----------
 LFC_THRESH <- 1.5
 FDR_THRESH <- 0.05
-ZLIM       <- 1.5      # fixed visual scale (±ZLIM)
-DO_CLIP <- FALSE
-
 ## ---------- 1) Load DE results; call gained/lost/static ----------
-load(file.path(out_data_dir, "wasp_atac_cqnnorm_deseq2_re.RData"))
+load(file.path(out_data_dir, "02_cqnnorm_deseq2_re.RData"))
 # expects: atacdds (DESeq2 object), atac_res_Shrink (DE results with shrinkage)
 
 atac_res_Shrink <- atac_res_Shrink[!is.na(atac_res_Shrink$padj)]
@@ -291,9 +296,14 @@ atac_res_Shrink_df$class <- "static"
 atac_res_Shrink_df$class[atac_res_Shrink_df$peakID %in% gained$peakID] <- "gained"
 atac_res_Shrink_df$class[atac_res_Shrink_df$peakID %in% lost$peakID]   <- "lost"
 
-write.table(gained, file = file.path(out_data_dir, "chon_gainedFNF_specific.txt"), 
+write.table(gained, file = file.path(out_data_dir, "gainedFNF_specific.txt"), 
             sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(lost, file = file.path(out_data_dir, "chon_lostFNF_specific.txt"), 
+write.table(lost, file = file.path(out_data_dir, "lostFNF_specific.txt"), 
             sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(atac_res_Shrink_df, file = file.path(out_data_dir, "chon_atac_allPeaks.txt"), 
+write.table(atac_res_Shrink_df, file = file.path(out_data_dir, "atac_allPeaks.txt"), 
             sep = "\t", row.names = FALSE, quote = FALSE)
+
+
+# Save the significant peaks
+save(diff_atac_sig, gained, lost, static,atac_res_Shrink_df,
+     file = file.path(out_data_dir,"04_atac_diff_significant_peaks.RData"))

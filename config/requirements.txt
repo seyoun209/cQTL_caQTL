@@ -1,0 +1,14 @@
+snakemake==8.27.1
+snakemake-executor-plugin-cluster-generic
+pandas
+kneed
+pysam
+tables
+wheel
+pyyaml
+# snpflip dependencies (manual installation required due to Python 3.12 issues)
+docopt
+natsort
+pyfaidx
+# Note: snpflip itself must be installed manually from source
+# See installation instructions in workflow documentation
