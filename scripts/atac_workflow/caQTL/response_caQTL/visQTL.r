@@ -5,6 +5,8 @@ library(dplyr)
 library(data.table)
 library(ggtext)
 library(lme4)
+unloadNamespace("mariner")
+unloadNamespace("plotgardener")
 library(plotgardener, lib.loc="/users/s/e/seyoun/R/dev")
 library(RColorBrewer)
 yl_gn_bu <- brewer.pal(n = 9, name = "YlGnBu")
@@ -16,8 +18,8 @@ load(file.path(response_dir, "response_caQTL_PBS_highconf.RData"))
 load(file.path(response_dir, "response_caQTL_FNF_highconf.RData"))
 
 # nominal rds
-pbs_rasqual <- readRDS(file.path(response_dir, "pbs_rasqual_nominal.rds"))
-fnf_rasqual <- readRDS(file.path(response_dir, "fnf_rasqual_nominal.rds"))
+#pbs_rasqual <- readRDS(file.path(response_dir, "pbs_rasqual_nominal.rds"))
+#fnf_rasqual <- readRDS(file.path(response_dir, "fnf_rasqual_nominal.rds"))
 
 # 100kb nominal rds
 rasqual_dir <- file.path(base_dir, "caQTL/rasqual_output",paste0("combined_window_", 100,"kb"))
@@ -290,8 +292,8 @@ ylim_pg <- max(
 # Layout parameters
 #-----------------------------------------------------------
 track_gap <- 0.125
-track_height <- 0.5
-manhattan_height <- 0.7
+track_height <- 0.4
+manhattan_height <- 0.5
 current_y <- y_start
 
 #-----------------------------------------------------------

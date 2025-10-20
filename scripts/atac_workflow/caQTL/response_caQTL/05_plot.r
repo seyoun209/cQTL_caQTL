@@ -72,8 +72,8 @@ plot_caqtl_multitrack(
 dev.off()
 
 
-pdf(file.path(plot_dir, "poster_fig_case.pdf"), width = 6.5, height = 5.5)
-pageCreate(width = 6.5, height = 5.5, default.units = "inches",showGuides = FALSE)
+pdf(file.path(plot_dir, "poster_fig_case.pdf"), width = 6, height = 4.5)
+pageCreate(width = 6, height = 4.5, default.units = "inches",showGuides = FALSE)
 top_pbs <- pbs_highconf[1, ]
 plot_caqtl_multitrack(
   peak_id = top_pbs$peak,
@@ -81,29 +81,29 @@ plot_caqtl_multitrack(
   primary_dataset = "PBS",
   x_start = 0.5,
   y_start = 0.5,
-  width = 2.5,
+  width = 2,
   height = 1.4,
   zoom_range = 50000,
-  add_atac_signal = TRUE, 
-  add_rna_signal = TRUE
+  add_atac_signal = TRUE,
+  add_rna_signal = FALSE
 )
 
 #I need to change the line # 227-228 to:
 #minregion <- max(1, peak_center - zoom_range  ) # max(1, peak_center - zoom_range  - zoom_range/2
 #maxregion <- peak_center + zoom_range # peak_center + zoom_range/2
 
-top_fnf <- fnf_highconf[11, ]
+top_fnf <- fnf_highconf[2, ]
 plot_caqtl_multitrack(
   peak_id = top_fnf$peak,
   snp_id = top_fnf$snp,
   primary_dataset = "FNF",
   x_start = 3.7,
   y_start = 0.5,
-  width = 2.5,
+  width = 2,
   height = 1.4,
-  zoom_range = 50000,
+  zoom_range = 70000,
   add_atac_signal = TRUE, 
-  add_rna_signal = TRUE
+  add_rna_signal = FALSE
 )
 
 # pbs_boxplot <- create_caqtl_boxplot(
@@ -112,13 +112,13 @@ plot_caqtl_multitrack(
 #   highConf = pbs_highconf
 # )
 # save(pbs_boxplot, file = file.path(plot_dir, "pbs_caqtl_case_boxplot.rds"))
-# fnf_boxplot <- create_caqtl_boxplot(
-#   peak_id = top_fnf$peak,
-#   snp_id = top_fnf$snp,
-#   highConf = fnf_highconf
-# )
-# save(fnf_boxplot, file = file.path(plot_dir, "fnf_caqtl_case_boxplot.rds"))
+fnf_boxplot <- create_caqtl_boxplot(
+  peak_id = top_fnf$peak,
+  snp_id = top_fnf$snp,
+  highConf = fnf_highconf
+)
+#save(fnf_boxplot, file = file.path(plot_dir, "fnf_caqtl_case_boxplot.rds"))
 
-plotGG(pbs_boxplot, x = 0.1, y = 4, width = 3, height = 1.25)
-plotGG(fnf_boxplot, x = 3.3, y = 4, width = 3, height = 1.25)
+plotGG(pbs_boxplot, x = 0.2, y = 3, width = 2.4, height = 1)
+plotGG(fnf_boxplot, x = 3.4, y = 3, width = 2.4, height = 1)
 dev.off()
