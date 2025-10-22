@@ -256,7 +256,8 @@ rule allele_swap_check:
         perl_ver=config['perl'],
         rayner_script=config['rayner_script'],
         rayner_legend=config['rayner_legend'],
-        ref_path=config['ref']
+        ref_path=config['ref'],
+        outpre=mergeName
     shell:
         """
         module load plink/{params.plink_ver}
@@ -275,9 +276,9 @@ rule allele_swap_check:
         cd {params.merge_dir} && bash Run-plink.sh && cd -
         
         # Copy corrected PLINK files
-        cp {params.merge_dir}/CQTL_COA9_10_qcautosome-updated.bed {output.bed}
-        cp {params.merge_dir}/CQTL_COA9_10_qcautosome-updated.bim {output.bim}
-        cp {params.merge_dir}/CQTL_COA9_10_qcautosome-updated.fam {output.fam}
+        cp {params.merge_dir}/{params.outpre}_qcautosome-updated.bed {output.bed}
+        cp {params.merge_dir}/{params.outpre}_qcautosome-updated.bim {output.bim}
+        cp {params.merge_dir}/{params.outpre}_qcautosome-updated.fam {output.fam}
        
         """
 
@@ -291,13 +292,14 @@ rule vcf_zip:
         output_prefix=OUT("imputation", mergeName),
         samtools_ver=config['samtools'],
         ref_path=config['ref'],
-        add_chr_file=config['add_chr']
+        add_chr_file=config['add_chr'],
+        outpre=mergeName
     shell:
         """
         module load samtools/{params.samtools_ver}
         
         for chr in {{1..22}}; do
-            source_file="{params.merge_dir}/CQTL_COA9_10_qcautosome-updated-chr${{chr}}.vcf"
+            source_file="{params.merge_dir}/{params.outpre}_qcautosome-updated-chr${{chr}}.vcf"
             target_file="{params.output_prefix}_chr${{chr}}.vcf"
             
             # Add chr prefix if hg38, otherwise use as-is

@@ -340,11 +340,11 @@ fwrite(all_qtl_gwas_with_novelty,
 
 table_phenotype_variant <- all_qtl_gwas_overlaps %>%
   mutate(peak_snp = paste(peak, snp, sep = "-")) %>%
-  group_by(hg19_variant, condition, qtl_type) %>%
+  group_by(rsid, condition, qtl_type) %>%
   summarise(
     n_phenotypes = n_distinct(`Osteoarthritis phenotype`),
     phenotypes = paste(unique(`Osteoarthritis phenotype`), collapse = ","),
     peak_snp_pairs = paste(unique(peak_snp), collapse = ","),
     .groups = "drop"
   ) %>%
-  filter(n_phenotypes > 1)
+  filter(n_phenotypes >= 1) |> arrange(qtl_type) |> as.data.frame()

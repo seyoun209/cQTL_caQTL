@@ -8,21 +8,14 @@ window_type <- "25kb"
 conds <- c("pbs", "fnf")
 chromosomes <- 1:22
 
-for (cond in conds) {
-  cat("\nMerging condition:", cond, "\n")
-  
+for (cond in conds) {  
   # Directory containing chromosome files
   cond_dir <- file.path(data_dir, "05_LDFiltered_LeadsOnly", paste0("window_", window_type))
   
   # Collect all existing files
   files <- sprintf("%s/%s_chr%s_LDfiltered_leads_R2lt02.csv", cond_dir, cond, chromosomes)
   files <- files[file.exists(files)]
-  
-  if (length(files) == 0) {
-    cat(" No files found for", cond, "\n")
-    next
-  }
-  
+    
   # Read all chromosome files
   merged <- rbindlist(lapply(files, fread), fill = TRUE)
   
@@ -32,7 +25,6 @@ for (cond in conds) {
   # Save combined output
   out_file <- file.path(cond_dir, sprintf("%s_AllChr_LDfiltered_leads_R2lt02.csv", cond))
   fwrite(merged, out_file)
-  cat("Combined file saved:", out_file)
 }
 
 #-------------------------------------------------------------------

@@ -7,17 +7,20 @@ library(tidyverse)
 base_dir <- "/work/users/s/e/seyoun/cQTL_caQTL/atac_output"
 data_dir <- file.path(base_dir, "caQTL/data")
 plot_dir <- file.path(base_dir, "caQTL/plots")
-snp_dir <- file.path(data_dir, "03_LD_snplist", paste0("window_", window_type))
-dir.create(snp_dir, recursive = TRUE, showWarnings = FALSE)
+
+
 dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
 #-------------------------------------------------
 #Parameters
-window_type <- "25kb"  # or 1 or 100
+window_type <- "25kb"  # or 1, 10, 100, 25kb
 conditions <- c("pbs", "fnf")
 pc <- paste0("pc", 0)
 chromosomes <- 1:22
-bf_threshold <- 0.05
+
+
+snp_dir <- file.path(data_dir, "03_LD_snplist", paste0("window_", window_type))
+dir.create(snp_dir, recursive = TRUE, showWarnings = FALSE)
 #-------------------------------------------------
 
 #------ Make all the LD list of snps---------------
@@ -25,7 +28,7 @@ Full_RASQUAL <- NULL
 for (cond in conditions) {
   file <- file.path(data_dir, "02_MTC_final", 
                     paste0("window_", window_type), cond,
-                    sprintf("%s_%s_AllResults_25kb_MTCFinal.txt", cond, pc))
+                    sprintf("%s_%s_AllResults_%s_MTCFinal.txt", cond, pc, window_type))
   data <- fread(file)
   Full_RASQUAL <- rbind(Full_RASQUAL, data)
 }

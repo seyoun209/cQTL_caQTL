@@ -249,7 +249,11 @@ counts_dotPlot <- ggplot(summary_df, aes(x = pc, y = n_fdr, color = type)) +
 
 # Save the plot to a file and display it
 dir.create(file.path(plot_dir, "qc"), recursive = TRUE, showWarnings = FALSE)
-save(counts_dotPlot, file = file.path(plot_dir, "qc", "counts_dotplot.RData"))
-ggsave(filename = file.path(plot_dir, "qc", "counts_dotplot.pdf"),
+saveRDS(counts_dotPlot, file = file.path(plot_dir, "qc", paste0(window_type, "_counts_dotplot.rds")))
+ggsave(filename = file.path(plot_dir, "qc", paste0(window_type, "_counts_dotplot.pdf")),
        plot = counts_dotPlot, width = 7, height = 4, units = "in")
 print(counts_dotPlot)
+
+
+
+# Make a table for the  1kb, 10kb, 25kb, 100kb

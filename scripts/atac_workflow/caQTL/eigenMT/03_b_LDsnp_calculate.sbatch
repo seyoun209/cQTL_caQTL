@@ -21,8 +21,8 @@ CHR=${SLURM_ARRAY_TASK_ID}
 
 
 BFILE="/work/users/s/e/seyoun/cQTL_caQTL/atac_output/geno/pbs_geno/05_bfile_asvcf/chr${CHR}"
-SNP_LIST="/work/users/s/e/seyoun/cQTL_caQTL/atac_output/caQTL/data/03_LD_snplist/window_25kb/chr${CHR}_SNPList.txt"
-OUTPUT_DIR="/work/users/s/e/seyoun/cQTL_caQTL/atac_output/caQTL/data/04_LD_results/window_25kb/ld0"
+SNP_LIST="/work/users/s/e/seyoun/cQTL_caQTL/atac_output/caQTL/data/03_LD_snplist/window_10kb/chr${CHR}_SNPList.txt"
+OUTPUT_DIR="/work/users/s/e/seyoun/cQTL_caQTL/atac_output/caQTL/data/04_LD_results/window_10kb/ld0"
 mkdir -p ${OUTPUT_DIR}
 
 

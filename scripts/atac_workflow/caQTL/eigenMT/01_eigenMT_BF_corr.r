@@ -14,7 +14,7 @@ dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
 #-------------------------------------------------
 #Parameters
-window_type <- "25kb"  # or 1 or 100
+window_type <- "25kb"  # or 1, 10,25, or 100
 conditions <- c("pbs", "fnf")
 pcs <- paste0("pc", 0:10)
 chromosomes <- 1:22
